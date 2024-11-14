@@ -81,7 +81,7 @@ func loadCDDATracks(client *mpd.Client) error {
 }
 
 func loadCue(client *mpd.Client) error {
-    cueFilePath, err := cue.Generate("", "", false)
+    cueFilePath, err := cue.GenerateFromDisc()
     if err != nil || cueFilePath == "" {
         return fmt.Errorf("failed to generate CUE file: %w", err)
     }

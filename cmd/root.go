@@ -38,30 +38,9 @@ func ExecuteAction(action string) error {
 }
 
 func doMount(client *mpd.Client) error {
-	if err := mpdplayer.ClearQueue(client); err != nil {
-		return fmt.Errorf("failed to clear MPD queue: %w", err)
-	}
-
-	if err := mpdplayer.AttemptToLoadCD(client); err != nil {
-		return err
-	}
-
-	// TODO move to attempttoloadcd
-	if err := client.Play(-1); err != nil {
-		return fmt.Errorf("failed to start playback: %w", err)
-	}
-	return nil
+	return mpdplayer.CleanAndStart(client)
 }
 
 func doUnmount(client *mpd.Client) error {
-	// TODO move to mpd
-	if err := client.Stop(); err != nil {
-		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-	}
-
-	if err := mpdplayer.ClearQueue(client); err != nil {
-		return fmt.Errorf("error: Failed to clear MPD playlist: %w", err)
-	}
-
-	return nil
+	return mpdplayer.StopAndClean(client)
 }

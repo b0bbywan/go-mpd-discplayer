@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 const (
 	// Should be start and stop ?
 	ActionAdd    = "add"
 	ActionRemove = "remove"
-	socketPath   = "/run/user/1000/mpd/socket"
 )
 
+var (
+	MPDConnection   = config.MPDConnection
+)
 
 // executeAction handles the main logic for each action (add or remove).
 func ExecuteAction(action string) error {
-	client, err := mpd.Dial("unix", socketPath)
+	client, err := mpd.Dial(MPDConnection.Type, MPDConnection.Address)
 	if err != nil {
 		return fmt.Errorf("failed to connect to MPD: %w", err)
 	}

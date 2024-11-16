@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 	"path/filepath"
+
 	"github.com/spf13/viper"
-	"github.com/b0bbywan/go-cd-cuer/config"
+	"github.com/b0bbywan/go-disc-cuer/config"
 )
 
 const (

@@ -3,8 +3,9 @@ package mpdplayer
 import (
 	"fmt"
 	"log"
+
 	"github.com/fhs/gompd/v2/mpd"
-	"github.com/b0bbywan/go-cd-cuer/cue"
+	"github.com/b0bbywan/go-disc-cuer/cue"
 	"github.com/b0bbywan/go-mpd-discplayer/disc"
 )
 

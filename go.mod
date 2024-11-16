@@ -3,7 +3,7 @@ module github.com/b0bbywan/go-mpd-discplayer
 go 1.18
 
 require (
-	github.com/b0bbywan/go-cd-cuer v0.2.1
+	github.com/b0bbywan/go-disc-cuer v0.2.2
 	github.com/fhs/gompd/v2 v2.3.0
 	github.com/spf13/viper v1.19.0
 	go.uploadedlobster.com/discid v0.7.0

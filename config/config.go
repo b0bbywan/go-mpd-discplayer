@@ -22,6 +22,7 @@ type MPDConn struct {
 
 var (
 	MPDConnection MPDConn
+	TargetDevice string
 )
 
 func init() {
@@ -50,6 +51,7 @@ func init() {
 		}
 	}
 
+	TargetDevice = viper.GetString("TargetDevice")
 	// Populate the MPDConnection struct
 	MPDConnection = MPDConn{
 		Type:    viper.GetString("MPDConnection.Type"),

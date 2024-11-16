@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/b0bbywan/go-disc-cuer v0.2.2
 	github.com/fhs/gompd/v2 v2.3.0
+	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/spf13/viper v1.19.0
 	go.uploadedlobster.com/discid v0.7.0
 )
@@ -12,6 +13,7 @@ require (
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect

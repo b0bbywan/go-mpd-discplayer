@@ -8,9 +8,47 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/disc"
 )
 
-var (
+func CleanAndStart(client *mpd.Client) error {
+	if err := clearQueue(client); err != nil {
+		return fmt.Errorf("failed to clear MPD queue: %w", err)
+	}
 
-)
+	return attemptToLoadCD(client)
+}
+
+func StopAndClean(client *mpd.Client) error {
+	if err := client.Stop(); err != nil {
+		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+	}
+
+	return clearQueue(client)
+}
+
+// attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
+// If loading the CUE file fails, it falls back to loading individual CDDA tracks,
+func attemptToLoadCD(client *mpd.Client) error {
+	var err error
+	if err = loadCue(client); err == nil {
+		return nil
+	}
+
+	log.Printf("info: No valid CUE file, trying to load CDDA tracks: %v", err)
+	// Try loading individual tracks if CUE file loading failed
+	if err = loadCDDATracks(client); err == nil {
+		return nil
+	}
+
+	return client.Play(-1)
+}
+
+// clearQueue clears the MPD playlist.
+func clearQueue(client *mpd.Client) error {
+	if err := client.Clear(); err != nil {
+		return fmt.Errorf("failed to clear MPD playlist: %w", err)
+	}
+	log.Println("info: MPD queue cleared")
+	return nil
+}
 
 // loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
 // It does not handle fallback logic, leaving it to the caller.
@@ -20,11 +58,7 @@ func loadCDDATracks(client *mpd.Client) error {
 		return err
 	}
 
-	if err := addTracks(client, trackCount); err != nil {
-		return err
-	}
-
-	return nil
+	return addTracks(client, trackCount)
 }
 
 func loadCue(client *mpd.Client) error {
@@ -47,28 +81,5 @@ func addTracks(client *mpd.Client, trackCount int) error {
 		}
 	}
 	log.Printf("info: Added %d tracks to the playlist", trackCount)
-	return nil
-}
-
-// attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
-// If loading the CUE file fails, it falls back to loading individual CDDA tracks,
-// and if that also fails, it adds the whole CD.
-func AttemptToLoadCD(client *mpd.Client) error {
-	var err error
-	if err = loadCue(client); err == nil {
-		return nil
-	}
-
-	log.Printf("info: No valid CUE file, trying to load CDDA tracks: %v", err)
-	// Try loading individual tracks if CUE file loading failed
-	return loadCDDATracks(client)
-}
-
-// clearQueue clears the MPD playlist.
-func ClearQueue(client *mpd.Client) error {
-	if err := client.Clear(); err != nil {
-		return fmt.Errorf("failed to clear MPD playlist: %w", err)
-	}
-	log.Println("info: MPD queue cleared")
 	return nil
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -13,12 +14,37 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
+const (
+	ActionPlay = "play"
+	ActionStop = "stop"
+)
+
 var (
 	MPDConnection   = config.MPDConnection
 )
 
 // executeAction handles the main logic for each action (add or remove).
-func Execute() error {
+func ExecuteAction(action string) error {
+	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, config.MPDConnection.ReconnectWait)
+	switch action {
+		case ActionPlay:
+			if err := mpdClient.StartPlayback(); err != nil {
+				log.Printf("Error adding tracks: %w", err)
+				return fmt.Errorf("Error adding tracks: %w", err)
+			}
+			return nil
+		case ActionStop:
+			if err := mpdClient.StopPlayback(); err != nil {
+				log.Printf("Error adding tracks: %w", err)
+				return fmt.Errorf("Error adding tracks: %w", err)
+			}
+			return nil
+		default:
+			return fmt.Errorf("Unknown action: %s", action)
+		}
+}
+
+func Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

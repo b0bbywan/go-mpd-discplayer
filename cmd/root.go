@@ -25,7 +25,7 @@ var (
 
 // executeAction handles the main logic for each action (add or remove).
 func ExecuteAction(action string) error {
-	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, config.MPDConnection.ReconnectWait)
+	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	switch action {
 		case ActionPlay:
 			if err := mpdClient.StartPlayback(); err != nil {
@@ -55,7 +55,7 @@ func Run() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
-	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, config.MPDConnection.ReconnectWait)
+	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	handler := makeHandler(&wg, mpdClient)
 
 	wg.Add(1)

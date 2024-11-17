@@ -33,7 +33,9 @@ func init() {
 	viper.SetConfigName("config")  // name of config file (without extension)
 	viper.SetConfigType("yaml")    // config file format
 	viper.AddConfigPath(filepath.Join("/etc", config.AppName))  // Global configuration path
-	viper.AddConfigPath(filepath.Join(getHomeDir(), ".config", config.AppName)) // User config path
+	if home, err := os.UserHomeDir(); err == nil {
+		viper.AddConfigPath(filepath.Join(home, ".config", config.AppName)) // User config path
+	}
 
 	// Environment variable support
 	viper.SetEnvPrefix(strings.ReplaceAll(AppName, "-", "_")) // environment variables start with MPD_PLAYER
@@ -67,13 +69,4 @@ func validateMPDConnection(conn MPDConn) error {
 		return fmt.Errorf("MPDConnection.Address cannot be empty")
 	}
 	return nil
-}
-
-// getHomeDir returns the user home directory
-func getHomeDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to determine user home directory: %v\n", err)
-	}
-	return home
 }

@@ -2,14 +2,12 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
-	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/disc"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -21,12 +19,6 @@ var (
 
 // executeAction handles the main logic for each action (add or remove).
 func Execute() error {
-	client, err := mpd.Dial(MPDConnection.Type, MPDConnection.Address)
-	if err != nil {
-		return fmt.Errorf("failed to connect to MPD: %w", err)
-	}
-	defer client.Close()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -39,6 +31,7 @@ func Execute() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
+	var mpdClient *mpdplayer.ReconnectingMPDClient
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -48,7 +41,8 @@ func Execute() error {
 					log.Println("Stopping from cmd.")
 					return
 				default:
-					handler = makeHandler(&wg, client)
+					mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, 5)
+					handler = makeHandler(&wg, mpdClient)
 
 					// Update the handler with the new MPD client
 					if err := disc.StartMonitor(ctx, config.TargetDevice, handler); err != nil {
@@ -75,10 +69,7 @@ func Execute() error {
 	<-ctx.Done()
 
 	// Cleanup after receiving the termination signal
-	if client != nil {
-		log.Println("Closing MPD client.")
-		client.Close()
-	}
+	mpdClient.Disconnect()
 
 	// Wait for all goroutines to finish
 	wg.Wait()
@@ -86,22 +77,14 @@ func Execute() error {
 	return nil
 }
 
-func doMount(client *mpd.Client) error {
-	return mpdplayer.CleanAndStart(client)
-}
-
-func doUnmount(client *mpd.Client) error {
-	return mpdplayer.StopAndClean(client)
-}
-
-func makeHandler(wg *sync.WaitGroup, client *mpd.Client) disc.EventHandler {
+func makeHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) disc.EventHandler {
 	handler := disc.EventHandler{
 		OnAdd: func() {
 			log.Println("Adding tracks to MPD...")
 			wg.Add(1) // Increment the counter before starting the task
 			go func() {
 				defer wg.Done() // Decrement the counter once the task is done
-				if err := doMount(client); err != nil {
+				if err := mpdClient.StartPlayback(); err != nil {
 					log.Printf("Error adding tracks: %v\n", err)
 				}
 			}()
@@ -111,7 +94,7 @@ func makeHandler(wg *sync.WaitGroup, client *mpd.Client) disc.EventHandler {
 			wg.Add(1) // Increment the counter before starting the task
 			go func() {
 				defer wg.Done() // Decrement the counter once the task is done
-				if err := doUnmount(client); err != nil {
+				if err := mpdClient.StopPlayback(); err != nil {
 					log.Printf("Error removing tracks: %v\n", err)
 				}
 			}()

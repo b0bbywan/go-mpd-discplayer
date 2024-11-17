@@ -3,84 +3,102 @@ package mpdplayer
 import (
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/fhs/gompd/v2/mpd"
-	"github.com/b0bbywan/go-disc-cuer/cue"
-	"github.com/b0bbywan/go-mpd-discplayer/disc"
 )
 
-func CleanAndStart(client *mpd.Client) error {
-	if err := clearQueue(client); err != nil {
-		return fmt.Errorf("failed to clear MPD queue: %w", err)
-	}
-
-	return attemptToLoadCD(client)
+// ReconnectingMPDClient wraps gompd's MPD client and adds reconnection logic.
+type ReconnectingMPDClient struct {
+	connectionType	string
+	address			string
+	reconnectWait	time.Duration
+	client			*mpd.Client
+	mu				sync.Mutex
 }
 
-func StopAndClean(client *mpd.Client) error {
-	if err := client.Stop(); err != nil {
-		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+// NewReconnectingMPDClient creates a new instance of ReconnectingMPDClient.
+func NewReconnectingMPDClient(connectionType, address string, reconnectWait time.Duration) *ReconnectingMPDClient {
+	return &ReconnectingMPDClient{
+		connectionType: connectionType,
+		address:       address,
+		reconnectWait: reconnectWait,
 	}
-
-	return clearQueue(client)
 }
 
-// attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
-// If loading the CUE file fails, it falls back to loading individual CDDA tracks,
-func attemptToLoadCD(client *mpd.Client) error {
-	var err error
-	if err = loadCue(client); err == nil {
-		return nil
-	}
-
-	log.Printf("info: No valid CUE file, trying to load CDDA tracks: %v", err)
-	// Try loading individual tracks if CUE file loading failed
-	if err = loadCDDATracks(client); err == nil {
-		return nil
-	}
-
-	return client.Play(-1)
+// Connect establishes the initial connection to the MPD server.
+func (rc *ReconnectingMPDClient) Connect() error {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.connectWithoutLock()
 }
 
-// clearQueue clears the MPD playlist.
-func clearQueue(client *mpd.Client) error {
-	if err := client.Clear(); err != nil {
-		return fmt.Errorf("failed to clear MPD playlist: %w", err)
+// Execute runs the provided loadFunc, reconnecting if necessary.
+func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	// Ensure connection is valid
+	if rc.client == nil {
+		if err := rc.connectWithoutLock(); err != nil {
+			return fmt.Errorf("reconnection failed: %w", err)
+		}
 	}
-	log.Println("info: MPD queue cleared")
+
+	// Execute the provided function
+	if err := loadFunc(rc.client); err != nil {
+		// Handle connection issues and retry
+		if isConnError(err) {
+			log.Printf("Connection error detected: %v. Reconnecting...", err)
+			rc.client.Close()
+			rc.client = nil
+
+			if err := rc.connectWithoutLock(); err != nil {
+				return fmt.Errorf("reconnection failed: %w", err)
+			}
+
+			// Retry the function
+			if err := loadFunc(rc.client); err != nil {
+				return fmt.Errorf("function execution failed after reconnection: %w", err)
+			}
+		} else {
+			return fmt.Errorf("function execution error: %w", err)
+		}
+	}
+
 	return nil
 }
 
-// loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
-// It does not handle fallback logic, leaving it to the caller.
-func loadCDDATracks(client *mpd.Client) error {
-	trackCount, err := disc.GetTrackCount()
+// Disconnect safely closes the MPD connection.
+func (rc *ReconnectingMPDClient) Disconnect() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.disconnectWithoutLock()
+}
+
+func (rc *ReconnectingMPDClient) disconnectWithoutLock() {
+	if rc.client != nil {
+		rc.client.Close()
+		rc.client = nil
+	}
+}
+
+func (rc *ReconnectingMPDClient) Reconnect() error {
+	rc.disconnectWithoutLock()
+	return rc.Connect()
+}
+
+func (rc *ReconnectingMPDClient) connectWithoutLock() error {
+	if rc.client != nil {
+		rc.client.Close()
+	}
+
+	client, err := mpd.Dial(rc.connectionType, rc.address)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to connect to MPD server: %w", err)
 	}
 
-	return addTracks(client, trackCount)
-}
-
-func loadCue(client *mpd.Client) error {
-    cueFilePath, err := cue.GenerateFromDisc()
-    if err != nil || cueFilePath == "" {
-        return fmt.Errorf("failed to generate CUE file: %w", err)
-    }
-    log.Printf("info: Loading playlist from %s\n", cueFilePath)
-    if err := client.PlaylistLoad(cueFilePath, -1, -1); err != nil {
-        return fmt.Errorf("failed to load CUE playlist: %w", err)
-    }
-    return nil
-}
-
-// addTracks adds individual CDDA tracks to the MPD playlist based on the specified track count.
-func addTracks(client *mpd.Client, trackCount int) error {
-	for track := 1; track <= trackCount; track++ {
-		if err := client.Add(fmt.Sprintf("cdda:///%d", track)); err != nil {
-			return fmt.Errorf("failed to add track %d: %w", track, err)
-		}
-	}
-	log.Printf("info: Added %d tracks to the playlist", trackCount)
+	rc.client = client
 	return nil
 }

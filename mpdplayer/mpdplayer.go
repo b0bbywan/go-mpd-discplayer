@@ -3,6 +3,7 @@ package mpdplayer
 import (
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -51,10 +52,7 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 		// Handle connection issues and retry
 		if isConnError(err) {
 			log.Printf("Connection error detected: %v. Reconnecting...", err)
-			rc.client.Close()
-			rc.client = nil
-
-			if err := rc.connectWithoutLock(); err != nil {
+			if err := rc.Reconnect(); err != nil {
 				return fmt.Errorf("reconnection failed: %w", err)
 			}
 
@@ -77,6 +75,11 @@ func (rc *ReconnectingMPDClient) Disconnect() {
 	rc.disconnectWithoutLock()
 }
 
+func (rc *ReconnectingMPDClient) Reconnect() error {
+	rc.disconnectWithoutLock()
+	return rc.connectWithoutLock()
+}
+
 func (rc *ReconnectingMPDClient) disconnectWithoutLock() {
 	if rc.client != nil {
 		rc.client.Close()
@@ -84,21 +87,32 @@ func (rc *ReconnectingMPDClient) disconnectWithoutLock() {
 	}
 }
 
-func (rc *ReconnectingMPDClient) Reconnect() error {
-	rc.disconnectWithoutLock()
-	return rc.Connect()
-}
-
 func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 	if rc.client != nil {
 		rc.client.Close()
 	}
 
-	client, err := mpd.Dial(rc.connectionType, rc.address)
-	if err != nil {
-		return fmt.Errorf("failed to connect to MPD server: %w", err)
-	}
+	var err error
+	start := time.Now()
+	for retries := 0; time.Since(start) < rc.reconnectWait; retries++ {
+		client, err := mpd.Dial(rc.connectionType, rc.address)
+		if err == nil {
+			rc.client = client
+			return nil
+		}
 
-	rc.client = client
-	return nil
+		// Calculate wait time with exponential backoff, capped by reconnectWait
+		maxWait := float64(rc.reconnectWait.Seconds())
+		waitTime := time.Duration(math.Min(math.Pow(2, float64(retries)), maxWait)) * time.Second
+
+		// Ensure cumulative sleep doesn't exceed reconnectWait
+		elapsed := time.Since(start)
+		if elapsed+waitTime > rc.reconnectWait {
+			waitTime = rc.reconnectWait - elapsed
+		}
+
+		log.Printf("Retrying connection in %s: %v", waitTime, err)
+		time.Sleep(waitTime)
+	}
+	return fmt.Errorf("failed to connect to MPD server after %s: %w", rc.reconnectWait, err)
 }

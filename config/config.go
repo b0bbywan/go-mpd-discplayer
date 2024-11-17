@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/b0bbywan/go-disc-cuer/config"
@@ -18,6 +19,7 @@ const (
 type MPDConn struct {
 	Type    string // "unix" or "tcp"
 	Address string // socket path or TCP address
+	ReconnectWait time.Duration
 }
 
 var (
@@ -28,6 +30,7 @@ var (
 func init() {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
+	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("TargetDevice", "sr0")
 
 	// Load from configuration file, environment variables, and CLI flags
@@ -56,6 +59,7 @@ func init() {
 	MPDConnection = MPDConn{
 		Type:    viper.GetString("MPDConnection.Type"),
 		Address: viper.GetString("MPDConnection.Address"),
+		ReconnectWait: time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
 	}
 	if err = validateMPDConnection(MPDConnection); err != nil {
 		log.Fatalf("Error validating MPD Connection: %v\n", err)

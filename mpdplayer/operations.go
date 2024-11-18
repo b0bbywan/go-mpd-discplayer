@@ -6,11 +6,13 @@ import (
 
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/disc"
 )
 
 func (rc *ReconnectingMPDClient) StartPlayback() error {
 	return rc.execute(func(client *mpd.Client) error {
+		disc.SetDiscSpeed(config.GetDevicePath(), config.DiscSpeed)
 		if err := clearQueue(client); err != nil {
 			return fmt.Errorf("failed to clear MPD queue: %w", err)
 		}

@@ -23,8 +23,9 @@ type MPDConn struct {
 }
 
 var (
-	MPDConnection MPDConn
-	TargetDevice string
+	MPDConnection	MPDConn
+	TargetDevice	string
+	DiscSpeed		int
 )
 
 func init() {
@@ -32,6 +33,7 @@ func init() {
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("TargetDevice", "sr0")
+	viper.SetDefault("DiscSpeed", 12)
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")  // name of config file (without extension)
@@ -55,6 +57,7 @@ func init() {
 	}
 
 	TargetDevice = viper.GetString("TargetDevice")
+	DiscSpeed = viper.GetInt("DiscSpeed")
 	// Populate the MPDConnection struct
 	MPDConnection = MPDConn{
 		Type:    viper.GetString("MPDConnection.Type"),
@@ -75,4 +78,8 @@ func validateMPDConnection(conn MPDConn) error {
 		return fmt.Errorf("MPDConnection.Address cannot be empty")
 	}
 	return nil
+}
+
+func GetDevicePath() string {
+    return filepath.Join("dev", TargetDevice)
 }

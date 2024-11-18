@@ -9,7 +9,6 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
-
 func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) *hwcontrol.EventHandler {
 	handler := hwcontrol.NewBasicDiscHandler(config.TargetDevice)
 
@@ -21,7 +20,7 @@ func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 			if err := hwcontrol.SetDiscSpeed(config.GetDevicePath(), config.DiscSpeed); err != nil {
 				fmt.Printf("Failed to set disc speed: %w", err)
 			}
-			if err := mpdClient.StartPlayback(); err != nil {
+			if err := mpdClient.StartDiscPlayback(); err != nil {
 				log.Printf("Error adding tracks: %v\n", err)
 				return
 			}
@@ -32,7 +31,7 @@ func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
 			defer wg.Done() // Decrement the counter once the task is done
-			if err := mpdClient.StopPlayback(); err != nil {
+			if err := mpdClient.StopDiscPlayback(); err != nil {
 				log.Printf("Error removing tracks: %v\n", err)
 				return
 			}

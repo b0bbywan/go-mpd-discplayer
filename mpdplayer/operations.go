@@ -9,7 +9,7 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
-func (rc *ReconnectingMPDClient) StartPlayback() error {
+func (rc *ReconnectingMPDClient) StartDiscPlayback() error {
 	return rc.execute(func(client *mpd.Client) error {
 		if err := clearQueue(client); err != nil {
 			return fmt.Errorf("failed to clear MPD queue: %w", err)
@@ -18,13 +18,12 @@ func (rc *ReconnectingMPDClient) StartPlayback() error {
 	})
 }
 
-func (rc *ReconnectingMPDClient) StopPlayback() error {
+func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
 	return rc.execute(func(client *mpd.Client) error {
-	if err := client.Stop(); err != nil {
-		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-	}
-
-	return clearQueue(client)
+		if err := client.Stop(); err != nil {
+			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+		}
+		return clearQueue(client)
 	})
 }
 

@@ -28,13 +28,13 @@ func ExecuteAction(action string) error {
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	switch action {
 		case ActionPlay:
-			if err := mpdClient.StartPlayback(); err != nil {
+			if err := mpdClient.StartDiscPlayback(); err != nil {
 				log.Printf("Error adding tracks: %w", err)
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}
 			return nil
 		case ActionStop:
-			if err := mpdClient.StopPlayback(); err != nil {
+			if err := mpdClient.StopDiscPlayback(); err != nil {
 				log.Printf("Error adding tracks: %w", err)
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}

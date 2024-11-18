@@ -24,37 +24,16 @@ func Execute() error {
 
 	var wg sync.WaitGroup
 
-	handler := makeHandler(&wg, nil)
-
 	// Handle OS signals to gracefully stop the program
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
-	var mpdClient *mpdplayer.ReconnectingMPDClient
+	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, config.MPDConnection.ReconnectWait)
+	handler := makeHandler(&wg, mpdClient)
+
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-				case <-ctx.Done():
-					log.Println("Stopping from cmd.")
-					return
-				default:
-					mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection.Type, config.MPDConnection.Address, 5)
-					handler = makeHandler(&wg, mpdClient)
-
-					// Update the handler with the new MPD client
-					if err := disc.StartMonitor(ctx, config.TargetDevice, handler); err != nil {
-						log.Printf("Error starting monitor: %v\nRestarting...", err)
-						// Optionally, sleep or delay before retrying, or stop based on error
-						time.Sleep(time.Second) // Retry after some delay if you want
-						continue
-					}
-				}					
-			}
-	}()
-
+	go loop(&wg, ctx, handler)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -69,7 +48,9 @@ func Execute() error {
 	<-ctx.Done()
 
 	// Cleanup after receiving the termination signal
-	mpdClient.Disconnect()
+	if mpdClient != nil {
+		mpdClient.Disconnect()
+	}
 
 	// Wait for all goroutines to finish
 	wg.Wait()
@@ -86,6 +67,7 @@ func makeHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient)
 				defer wg.Done() // Decrement the counter once the task is done
 				if err := mpdClient.StartPlayback(); err != nil {
 					log.Printf("Error adding tracks: %v\n", err)
+					return
 				}
 			}()
 		},
@@ -96,9 +78,29 @@ func makeHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient)
 				defer wg.Done() // Decrement the counter once the task is done
 				if err := mpdClient.StopPlayback(); err != nil {
 					log.Printf("Error removing tracks: %v\n", err)
+					return
 				}
 			}()
 		},
 	}
 	return handler
+}
+
+func loop(wg *sync.WaitGroup, ctx context.Context, handler disc.EventHandler) {
+	defer wg.Done()
+	for {
+	select {
+		case <-ctx.Done():
+			log.Println("Stopping from cmd.")
+			return
+		default:
+			// Update the handler with the new MPD client
+			if err := disc.StartMonitor(ctx, config.TargetDevice, handler); err != nil {
+				log.Printf("Error starting monitor: %v\nRestarting...", err)
+				// Optionally, sleep or delay before retrying, or stop based on error
+				time.Sleep(time.Second) // Retry after some delay if you want
+				continue
+			}
+		}
+	}
 }

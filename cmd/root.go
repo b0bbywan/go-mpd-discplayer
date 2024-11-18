@@ -56,10 +56,12 @@ func Run() error {
 	defer signal.Stop(sigChan)
 
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
-	handler := makeHandler(&wg, mpdClient)
-
+	handler := newDiscHandler(&wg, mpdClient)
+	compositeHandler := &disc.CompositeEventHandler{
+		Handlers: []*disc.EventHandler{handler},
+	}
 	wg.Add(1)
-	go loop(&wg, ctx, handler)
+	go loop(&wg, ctx, compositeHandler)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -84,35 +86,7 @@ func Run() error {
 	return nil
 }
 
-func makeHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) disc.EventHandler {
-	handler := disc.EventHandler{
-		OnAdd: func() {
-			log.Println("Adding tracks to MPD...")
-			wg.Add(1) // Increment the counter before starting the task
-			go func() {
-				defer wg.Done() // Decrement the counter once the task is done
-				if err := mpdClient.StartPlayback(); err != nil {
-					log.Printf("Error adding tracks: %v\n", err)
-					return
-				}
-			}()
-		},
-		OnRemove: func() {
-			log.Println("Stopping playback...")
-			wg.Add(1) // Increment the counter before starting the task
-			go func() {
-				defer wg.Done() // Decrement the counter once the task is done
-				if err := mpdClient.StopPlayback(); err != nil {
-					log.Printf("Error removing tracks: %v\n", err)
-					return
-				}
-			}()
-		},
-	}
-	return handler
-}
-
-func loop(wg *sync.WaitGroup, ctx context.Context, handler disc.EventHandler) {
+func loop(wg *sync.WaitGroup, ctx context.Context, compositeHandlers *disc.CompositeEventHandler) {
 	defer wg.Done()
 	for {
 	select {
@@ -121,7 +95,7 @@ func loop(wg *sync.WaitGroup, ctx context.Context, handler disc.EventHandler) {
 			return
 		default:
 			// Update the handler with the new MPD client
-			if err := disc.StartMonitor(ctx, config.TargetDevice, handler); err != nil {
+			if err := compositeHandlers.StartMonitor(ctx); err != nil {
 				log.Printf("Error starting monitor: %v\nRestarting...", err)
 				// Optionally, sleep or delay before retrying, or stop based on error
 				time.Sleep(time.Second) // Retry after some delay if you want

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/disc"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -57,8 +57,8 @@ func Run() error {
 
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	handler := newDiscHandler(&wg, mpdClient)
-	compositeHandler := &disc.CompositeEventHandler{
-		Handlers: []*disc.EventHandler{handler},
+	compositeHandler := &hwcontrol.CompositeEventHandler{
+		Handlers: []*hwcontrol.EventHandler{handler},
 	}
 	wg.Add(1)
 	go loop(&wg, ctx, compositeHandler)
@@ -86,7 +86,7 @@ func Run() error {
 	return nil
 }
 
-func loop(wg *sync.WaitGroup, ctx context.Context, compositeHandlers *disc.CompositeEventHandler) {
+func loop(wg *sync.WaitGroup, ctx context.Context, compositeHandlers *hwcontrol.CompositeEventHandler) {
 	defer wg.Done()
 	for {
 	select {

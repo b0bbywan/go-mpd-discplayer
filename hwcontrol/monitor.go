@@ -1,4 +1,4 @@
-package disc
+package hwcontrol
 
 import (
 	"context"

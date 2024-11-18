@@ -1,22 +1,26 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/disc"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 
-func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) *disc.EventHandler {
-	handler := disc.NewBasicDiscHandler(config.TargetDevice)
+func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) *hwcontrol.EventHandler {
+	handler := hwcontrol.NewBasicDiscHandler(config.TargetDevice)
 
 	handler.OnAddFunc = func() {
 		log.Println("Adding tracks to MPD...")
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
 			defer wg.Done() // Decrement the counter once the task is done
+			if err := hwcontrol.SetDiscSpeed(config.GetDevicePath(), config.DiscSpeed); err != nil {
+				fmt.Printf("Failed to set disc speed: %w", err)
+			}
 			if err := mpdClient.StartPlayback(); err != nil {
 				log.Printf("Error adding tracks: %v\n", err)
 				return

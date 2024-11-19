@@ -6,6 +6,7 @@ import (
 
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
@@ -66,7 +67,7 @@ func clearQueue(client *mpd.Client) error {
 // loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
 // It does not handle fallback logic, leaving it to the caller.
 func loadCDDATracks(client *mpd.Client) error {
-	trackCount, err := hwcontrol.GetTrackCount()
+	trackCount, err := hwcontrol.GetTrackCount(config.TargetDevice)
 	if err != nil {
 		return fmt.Errorf("failed to get track count: %w", err)
 	}

@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"github.com/jochenvg/go-udev"
-	"go.uploadedlobster.com/discid"
+	"github.com/b0bbywan/go-disc-cuer/utils"
 	"golang.org/x/sys/unix"
 )
 
@@ -55,14 +55,8 @@ func checkDiscChange(action string) bool {
 	return true
 }
 
-func GetTrackCount() (int, error) {
-	disc, err := discid.Read("")
-	if err != nil {
-		return 0, err
-	}
-	defer disc.Close()
-
-	return disc.LastTrackNumber(), nil
+func GetTrackCount(device string) (int, error) {
+	return utils.GetTrackCount(device)
 }
 
 func SetDiscSpeed(device string, speed int) error {

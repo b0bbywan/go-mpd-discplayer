@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"sync"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
@@ -10,7 +11,7 @@ import (
 )
 
 func newDiscHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) *hwcontrol.EventHandler {
-	handler := hwcontrol.NewBasicDiscHandler(config.TargetDevice)
+	handler := hwcontrol.NewBasicDiscHandler(filepath.Base(config.TargetDevice))
 
 	handler.OnAddFunc = func() {
 		log.Println("Adding tracks to MPD...")

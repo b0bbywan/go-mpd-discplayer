@@ -9,12 +9,23 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
+type PlaybackAction func(client *mpd.Client) error
+
 func (rc *ReconnectingMPDClient) StartDiscPlayback() error {
+	return rc.startPlayback(attemptToLoadCD)
+}
+
+// StartDiscPlayback now accepts a custom playback function
+func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction) error {
 	return rc.execute(func(client *mpd.Client) error {
 		if err := clearQueue(client); err != nil {
 			return fmt.Errorf("failed to clear MPD queue: %w", err)
 		}
-		return attemptToLoadCD(client)
+		// Use the provided playback function
+		if err := playbackFunc(client); err != nil {
+			return fmt.Errorf("failed to load playlist: %w", err)
+		}
+		return client.Play(-1)
 	})
 }
 
@@ -35,13 +46,12 @@ func attemptToLoadCD(client *mpd.Client) error {
 		return nil
 	}
 
-	log.Printf("info: No valid CUE file, trying to load CDDA tracks: %v", err)
+	log.Printf("info: No valid CUE file, trying to load CDDA tracks: %w", err)
 	// Try loading individual tracks if CUE file loading failed
 	if err = loadCDDATracks(client); err == nil {
 		return nil
 	}
-
-	return client.Play(-1)
+    return fmt.Errorf("failed to load CD, no valid CUE file and unable to load CDDA tracks: %w", err)
 }
 
 // clearQueue clears the MPD playlist.
@@ -67,6 +77,7 @@ func loadCDDATracks(client *mpd.Client) error {
 func loadCue(client *mpd.Client) error {
 	cueFilePath, err := cue.GenerateFromDisc()
 	if err != nil || cueFilePath == "" {
+		fmt.Errorf("failed to generate CUE file: %v", err)
 		return fmt.Errorf("failed to generate CUE file: %w", err)
 	}
 	log.Printf("info: Loading playlist from %s\n", cueFilePath)

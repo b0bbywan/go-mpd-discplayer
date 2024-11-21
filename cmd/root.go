@@ -55,13 +55,23 @@ func Run() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
+	// Initialize MPD client
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
-	handler := newDiscHandler(&wg, mpdClient)
-	compositeHandler := &hwcontrol.CompositeEventHandler{
-		Handlers: []*hwcontrol.EventHandler{handler},
+
+	var handlers []*hwcontrol.EventHandler
+	// Create event handlers (subscribers) passing the context
+	handlers = append(handlers, newDiscHandlers(&wg, mpdClient)...)
+	handlers = append(handlers, newUSBHandlers(&wg, mpdClient)...)
+	for _, handler := range handlers {
+		handler.StartSubscriber(ctx) // Use the passed context
 	}
+
+	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
-	go loop(&wg, ctx, compositeHandler)
+	go loop(&wg, ctx, handlers)
+
+
+	// Signal handling goroutine to cleanly stop the program
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -86,7 +96,8 @@ func Run() error {
 	return nil
 }
 
-func loop(wg *sync.WaitGroup, ctx context.Context, compositeHandlers *hwcontrol.CompositeEventHandler) {
+
+func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHandler) {
 	defer wg.Done()
 	for {
 	select {
@@ -94,11 +105,9 @@ func loop(wg *sync.WaitGroup, ctx context.Context, compositeHandlers *hwcontrol.
 			log.Println("Stopping from cmd.")
 			return
 		default:
-			// Update the handler with the new MPD client
-			if err := compositeHandlers.StartMonitor(ctx); err != nil {
-				log.Printf("Error starting monitor: %v\nRestarting...", err)
-				// Optionally, sleep or delay before retrying, or stop based on error
-				time.Sleep(time.Second) // Retry after some delay if you want
+			if err := hwcontrol.StartMonitor(ctx, handlers); err != nil {
+				log.Printf("Error starting monitor: %w\n", err)
+				time.Sleep(time.Second) // Retry after some delay
 				continue
 			}
 		}

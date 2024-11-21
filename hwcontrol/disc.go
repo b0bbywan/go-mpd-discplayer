@@ -14,32 +14,48 @@ const (
 	CDROM_GET_SPEED = 0x5323 // ioctl command for getting speed
 )
 
-func NewBasicDiscHandler(targetDevice string) *EventHandler {
-	return &EventHandler{
-		PreCheckFunc: func(device *udev.Device) bool {
-			return discPreChecker(device, targetDevice)
-		},
-		AddCheckFunc: onAddDiscChecker,
-		RemoveCheckFunc: onRemoveDiscChecker,
-	}
+// NewBasicDiscHandlers initializes two event handlers for "add" and "remove" disc events.
+func NewBasicDiscHandlers(targetDevice string) []*EventHandler {
+	addHandler := newBasicDiscHandler("addDisc", targetDevice, onAddDiscChecker)
+	removeHandler := newBasicDiscHandler("removeDisc", targetDevice, onRemoveDiscChecker)
+
+	return []*EventHandler{addHandler, removeHandler}
 }
 
-func onRemoveDiscChecker(device *udev.Device, action string) bool {
+// newBasicDiscHandler creates a reusable event handler for disc-related actions.
+func newBasicDiscHandler(name, targetDevice string, actionChecker func(*udev.Device) bool) *EventHandler {
+	return newBasicHandler(
+		name,
+		func(device *udev.Device) bool {
+			return discPreChecker(device, targetDevice)
+		},
+		func(device *udev.Device, action string) bool {
+			return discActionChecker(device, device.Action(), actionChecker)
+		},
+	)
+}
+
+// discActionChecker validates a disc action and runs additional custom checks.
+func discActionChecker(device *udev.Device, action string, checker func(*udev.Device) bool) bool {
 	if !checkDiscChange(action) {
 		return false
 	}
+	return checker(device)
+}
+
+// onRemoveDiscChecker checks if a disc removal was requested.
+func onRemoveDiscChecker(device *udev.Device) bool {
 	ejectRequest := device.PropertyValue("DISK_EJECT_REQUEST")
 	return ejectRequest == "1"
 }
 
-func onAddDiscChecker(device *udev.Device, action string) bool {
-	if !checkDiscChange(action) {
-		return false
-	}
+// onAddDiscChecker verifies that the inserted disc has audio tracks.
+func onAddDiscChecker(device *udev.Device) bool {
 	trackCount := device.PropertyValue("ID_CDROM_MEDIA_TRACK_COUNT_AUDIO")
 	return trackCount != ""
 }
 
+// discPreChecker ensures the device is valid and matches the target device.
 func discPreChecker(device *udev.Device, targetDevice string) bool {
 	if device == nil || device.Sysname() != targetDevice {
 		return false
@@ -47,6 +63,7 @@ func discPreChecker(device *udev.Device, targetDevice string) bool {
 	return true
 }
 
+// checkDiscChange validates that the action is "change".
 func checkDiscChange(action string) bool {
 	if action != "change" {
 		log.Printf("Unhandled action: %s\n", action)

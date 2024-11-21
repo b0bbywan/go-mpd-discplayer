@@ -8,12 +8,23 @@ import (
 
 var usbNameRegex = regexp.MustCompile(`^sd.*$`)
 
-func NewBasicUSBHandler() *EventHandler {
-    return &EventHandler{
-        PreCheckFunc: usbPreChecker,
-        AddCheckFunc: onAddUSBChecker,
-        RemoveCheckFunc: onRemoveUSBChecker,
-    }
+func NewBasicUSBHandlers() []*EventHandler {
+    addHandler := newBasicUSBHandler("addUSB", onAddUSBChecker)
+    removeHandler := newBasicUSBHandler("removeUSB", onRemoveUSBChecker)
+
+    return []*EventHandler{addHandler, removeHandler}
+}
+
+func newBasicUSBHandler(name string, actionChecker func(*udev.Device, string) bool) *EventHandler {
+    return newBasicHandler(
+        name,
+        func(device *udev.Device) bool {
+            return usbPreChecker(device)
+        },
+        func(device *udev.Device, action string) bool {
+            return actionChecker(device, action)
+        },
+    )
 }
 
 func onRemoveUSBChecker(device *udev.Device, action string) bool {

@@ -28,7 +28,7 @@ func ExecuteAction(action string) error {
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	switch action {
 		case ActionPlay:
-			if err := mpdClient.StartDiscPlayback(); err != nil {
+			if err := mpdClient.StartDiscPlayback(config.TargetDevice); err != nil {
 				log.Printf("Error adding tracks: %w", err)
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}

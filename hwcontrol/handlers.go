@@ -41,8 +41,8 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 func (h *EventHandler) Process(device *udev.Device) error {
 	if h.processFunc != nil && device != nil {
 		if err := h.processFunc(device); err != nil {
-			log.Printf("(%s) Failed to process device %s: %w", h.Name(), device.Sysname(), err)
-			return fmt.Errorf("(%s) Failed to process device %s: %w", h.Name(), device.Sysname(), err)
+			log.Printf("(%s) Failed to process device %s: %w", h.Name(), device.Devnode(), err)
+			return fmt.Errorf("(%s) Failed to process device %s: %w", h.Name(), device.Devnode(), err)
 		}
 	}
 	return nil

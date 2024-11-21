@@ -15,19 +15,19 @@ const (
 )
 
 // NewBasicDiscHandlers initializes two event handlers for "add" and "remove" disc events.
-func NewBasicDiscHandlers(targetDevice string) []*EventHandler {
-	addHandler := newBasicDiscHandler("addDisc", targetDevice, onAddDiscChecker)
-	removeHandler := newBasicDiscHandler("removeDisc", targetDevice, onRemoveDiscChecker)
+func NewBasicDiscHandlers() []*EventHandler {
+	addHandler := newBasicDiscHandler("addDisc", onAddDiscChecker)
+	removeHandler := newBasicDiscHandler("removeDisc", onRemoveDiscChecker)
 
 	return []*EventHandler{addHandler, removeHandler}
 }
 
 // newBasicDiscHandler creates a reusable event handler for disc-related actions.
-func newBasicDiscHandler(name, targetDevice string, actionChecker func(*udev.Device) bool) *EventHandler {
+func newBasicDiscHandler(name string, actionChecker func(*udev.Device) bool) *EventHandler {
 	return newBasicHandler(
 		name,
 		func(device *udev.Device) bool {
-			return discPreChecker(device, targetDevice)
+			return discPreChecker(device)
 		},
 		func(device *udev.Device, action string) bool {
 			return discActionChecker(device, device.Action(), actionChecker)
@@ -56,8 +56,8 @@ func onAddDiscChecker(device *udev.Device) bool {
 }
 
 // discPreChecker ensures the device is valid and matches the target device.
-func discPreChecker(device *udev.Device, targetDevice string) bool {
-	if device == nil || device.Sysname() != targetDevice {
+func discPreChecker(device *udev.Device) bool {
+	if device == nil || device.PropertyValue("ID_CDROM_MEDIA") != "1"{
 		return false
 	}
 	return true

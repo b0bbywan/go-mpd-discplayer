@@ -29,7 +29,7 @@ Ensure libgudev and libdiscid are installed. Run the following commands based on
 
 ```bash
 # Debian
-sudo apt install libdiscid0 libdiscid-dev libgudev-1.0-0 libgudev-1.0-0-dev
+sudo apt install libdiscid0 libdiscid-dev libgudev-1.0-0 libgudev-1.0-dev
 # Fedora
 sudo dnf install libdiscid libdiscid-devel libgudev libgudev-devel
 ```

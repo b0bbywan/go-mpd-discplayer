@@ -63,13 +63,13 @@ func onAddDiscChecker(device *udev.Device) bool {
 
 // discPreChecker ensures the device is valid and matches the target device.
 func discPreChecker(device *udev.Device) bool {
-	if device == nil || device.PropertyValue("ID_CDROM_MEDIA") != "1"{
+	if device == nil || device.PropertyValue("ID_CDROM") != "1"{
 		return false
 	}
 	return true
 }
 
-// checkDiscChange validates that the action is "change".
+// checkDiscChange validates that the action is handled.
 func checkDiscChange(action string) bool {
 	if action == EventChange || action == EventRemove || action == EventAdd {
 		return true

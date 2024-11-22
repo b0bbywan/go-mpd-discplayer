@@ -99,7 +99,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		}
 		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 		// Calculate wait time with exponential backoff, capped by reconnectWait
-		log.Printf("Retrying connection in %s: %v", waitTime, err)
+		log.Printf("Retrying connection in %s: %w", waitTime, err)
 		time.Sleep(waitTime)
 	}
 	return fmt.Errorf("failed to connect to MPD server after %s: %w", rc.mpcConfig.ReconnectWait, err)

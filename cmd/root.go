@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/disc"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -28,13 +28,13 @@ func ExecuteAction(action string) error {
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
 	switch action {
 		case ActionPlay:
-			if err := mpdClient.StartPlayback(); err != nil {
+			if err := mpdClient.StartDiscPlayback(config.TargetDevice); err != nil {
 				log.Printf("Error adding tracks: %w", err)
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}
 			return nil
 		case ActionStop:
-			if err := mpdClient.StopPlayback(); err != nil {
+			if err := mpdClient.StopDiscPlayback(); err != nil {
 				log.Printf("Error adding tracks: %w", err)
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}
@@ -55,11 +55,23 @@ func Run() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
+	// Initialize MPD client
 	mpdClient := mpdplayer.NewReconnectingMPDClient(config.MPDConnection)
-	handler := makeHandler(&wg, mpdClient)
 
+	var handlers []*hwcontrol.EventHandler
+	// Create event handlers (subscribers) passing the context
+	handlers = append(handlers, newDiscHandlers(&wg, mpdClient)...)
+	handlers = append(handlers, newUSBHandlers(&wg, mpdClient)...)
+	for _, handler := range handlers {
+		handler.StartSubscriber(ctx) // Use the passed context
+	}
+
+	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
-	go loop(&wg, ctx, handler)
+	go loop(&wg, ctx, handlers)
+
+
+	// Signal handling goroutine to cleanly stop the program
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -84,35 +96,8 @@ func Run() error {
 	return nil
 }
 
-func makeHandler(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) disc.EventHandler {
-	handler := disc.EventHandler{
-		OnAdd: func() {
-			log.Println("Adding tracks to MPD...")
-			wg.Add(1) // Increment the counter before starting the task
-			go func() {
-				defer wg.Done() // Decrement the counter once the task is done
-				if err := mpdClient.StartPlayback(); err != nil {
-					log.Printf("Error adding tracks: %v\n", err)
-					return
-				}
-			}()
-		},
-		OnRemove: func() {
-			log.Println("Stopping playback...")
-			wg.Add(1) // Increment the counter before starting the task
-			go func() {
-				defer wg.Done() // Decrement the counter once the task is done
-				if err := mpdClient.StopPlayback(); err != nil {
-					log.Printf("Error removing tracks: %v\n", err)
-					return
-				}
-			}()
-		},
-	}
-	return handler
-}
 
-func loop(wg *sync.WaitGroup, ctx context.Context, handler disc.EventHandler) {
+func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHandler) {
 	defer wg.Done()
 	for {
 	select {
@@ -120,11 +105,9 @@ func loop(wg *sync.WaitGroup, ctx context.Context, handler disc.EventHandler) {
 			log.Println("Stopping from cmd.")
 			return
 		default:
-			// Update the handler with the new MPD client
-			if err := disc.StartMonitor(ctx, config.TargetDevice, handler); err != nil {
-				log.Printf("Error starting monitor: %v\nRestarting...", err)
-				// Optionally, sleep or delay before retrying, or stop based on error
-				time.Sleep(time.Second) // Retry after some delay if you want
+			if err := hwcontrol.StartMonitor(ctx, handlers); err != nil {
+				log.Printf("Error starting monitor: %w\n", err)
+				time.Sleep(time.Second) // Retry after some delay
 				continue
 			}
 		}

@@ -32,7 +32,7 @@ func init() {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
-	viper.SetDefault("TargetDevice", "sr0")
+	viper.SetDefault("TargetDevice", "/dev/sr0")
 	viper.SetDefault("DiscSpeed", 12)
 
 	// Load from configuration file, environment variables, and CLI flags
@@ -51,7 +51,7 @@ func init() {
 	if err != nil {
 		// File not found is acceptable, only raise errors for other issues
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error reading config file: %w", err)
 			os.Exit(1)
 		}
 	}
@@ -65,7 +65,7 @@ func init() {
 		ReconnectWait: time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
 	}
 	if err = validateMPDConnection(MPDConnection); err != nil {
-		log.Fatalf("Error validating MPD Connection: %v\n", err)
+		log.Fatalf("Error validating MPD Connection: %w", err)
 	}
 }
 
@@ -78,8 +78,4 @@ func validateMPDConnection(conn MPDConn) error {
 		return fmt.Errorf("MPDConnection.Address cannot be empty")
 	}
 	return nil
-}
-
-func GetDevicePath() string {
-    return filepath.Join("dev", TargetDevice)
 }

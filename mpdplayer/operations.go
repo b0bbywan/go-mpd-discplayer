@@ -3,6 +3,7 @@ package mpdplayer
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-disc-cuer/cue"
@@ -31,6 +32,9 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 
 func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
 	return rc.execute(func(client *mpd.Client) error {
+		if !checkPathPlaying(client, "cdda://") {
+			return nil
+		}
 		if err := client.Stop(); err != nil {
 			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
 		}
@@ -96,4 +100,21 @@ func addTracks(client *mpd.Client, trackCount int) error {
 	}
 	log.Printf("info: Added %d tracks to the playlist", trackCount)
 	return nil
+}
+
+func checkPathPlaying(client *mpd.Client, checkPath string) bool {
+	song, err := client.CurrentSong()
+	if err != nil {
+		return true
+	}
+
+	// Check if a song is currently playing
+	if len(song) == 0 {
+		return true
+	}
+
+	if path, ok := song["file"]; ok {
+		return strings.Contains(path, checkPath)
+	}
+	return false
 }

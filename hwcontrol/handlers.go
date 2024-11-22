@@ -9,6 +9,12 @@ import (
 	"github.com/jochenvg/go-udev"
 )
 
+const (
+	EventAdd	= "add"
+	EventChange = "change"
+	EventRemove	= "remove"
+)
+
 type EventHandler struct {
 	name				string
 	deviceFilterFunc	func(*udev.Device) bool

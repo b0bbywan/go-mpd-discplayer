@@ -28,11 +28,11 @@ func newBasicUSBHandler(name string, actionChecker func(*udev.Device, string) bo
 }
 
 func onRemoveUSBChecker(device *udev.Device, action string) bool {
-    return action == "remove"
+    return action == EventRemove
 }
 
 func onAddUSBChecker(device *udev.Device, action string) bool {
-    return action == "add"
+    return action == EventAdd
 }
 
 func usbPreChecker(device *udev.Device) bool {

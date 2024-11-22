@@ -45,12 +45,18 @@ func discActionChecker(device *udev.Device, action string, checker func(*udev.De
 
 // onRemoveDiscChecker checks if a disc removal was requested.
 func onRemoveDiscChecker(device *udev.Device) bool {
+	if device.Action() == EventRemove {
+		return true
+	}
 	ejectRequest := device.PropertyValue("DISK_EJECT_REQUEST")
 	return ejectRequest == "1"
 }
 
 // onAddDiscChecker verifies that the inserted disc has audio tracks.
 func onAddDiscChecker(device *udev.Device) bool {
+	if device.Action() == EventRemove {
+		return false
+	}
 	trackCount := device.PropertyValue("ID_CDROM_MEDIA_TRACK_COUNT_AUDIO")
 	return trackCount != ""
 }
@@ -65,11 +71,11 @@ func discPreChecker(device *udev.Device) bool {
 
 // checkDiscChange validates that the action is "change".
 func checkDiscChange(action string) bool {
-	if action != "change" {
-		log.Printf("Unhandled action: %s\n", action)
-		return false
+	if action == EventChange || action == EventRemove || action == EventAdd {
+		return true
 	}
-	return true
+	log.Printf("Unhandled action: %s\n", action)
+	return false
 }
 
 func GetTrackCount(device string) (int, error) {

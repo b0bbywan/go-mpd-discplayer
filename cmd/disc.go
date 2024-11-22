@@ -17,6 +17,9 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 
 	// Define action for the "add" event (handler[0])
 	handlers[0].SetProcessor(wg, "Starting Disc Playback", func(device *udev.Device) error {
+		if err := hwcontrol.SetDiscSpeed(device.Devnode(), 12); err != nil {
+			log.Printf("Error setting disc speed on %s: %w", device.Devnode(), err)
+		}
 		if err := mpdClient.StartDiscPlayback(device.Devnode()); err != nil {
 			log.Printf("Error starting playback: %w", err)
 			return fmt.Errorf("Error starting playback: %w", err)

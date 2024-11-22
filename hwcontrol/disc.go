@@ -11,7 +11,7 @@ import (
 
 const (
 	CDROM_SET_SPEED = 0x5322 // ioctl command for setting speed
-	CDROM_GET_SPEED = 0x5323 // ioctl command for getting speed
+	CDROM_PROC_FILE_INFO = "/proc/sys/dev/cdrom/info"
 )
 
 // NewBasicDiscHandlers initializes two event handlers for "add" and "remove" disc events.

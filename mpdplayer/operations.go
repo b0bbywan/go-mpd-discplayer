@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-disc-cuer/cue"
@@ -16,6 +17,10 @@ type PlaybackAction func(client *mpd.Client, device string) error
 
 func (rc *ReconnectingMPDClient) StartDiscPlayback(device string) error {
 	return rc.startPlayback(attemptToLoadCD, device)
+}
+
+func (rc *ReconnectingMPDClient) StartUSBPlayback(device string) error {
+	return rc.startPlayback(addUSBToQueue, device)
 }
 
 // StartDiscPlayback now accepts a custom playback function
@@ -73,7 +78,6 @@ func clearQueue(client *mpd.Client) error {
 }
 
 // loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
-// It does not handle fallback logic, leaving it to the caller.
 func loadCDDATracks(client *mpd.Client, device string) error {
 	trackCount, err := hwcontrol.GetTrackCount(device)
 	if err != nil {
@@ -128,6 +132,18 @@ func checkSongPath(song mpd.Attrs, checkPath string) bool {
 	return false
 }
 
+// addUSBToQueue adds the specified label to the playlist.
+func addUSBToQueue(client *mpd.Client, label string) error {
+	if err := UpdateDBAndWait(client, label); err != nil {
+		return fmt.Errorf("Database update failed: %w", err)
+	}
+	log.Printf("Adding %s files to queue...", label)
+	if err := client.Add(label); err != nil {
+		return fmt.Errorf("failed to add files from %s: %w", label, err)
+	}
+	return nil
+}
+
 func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
 	playlist, err := client.PlaylistInfo(-1, -1)
 	if err != nil {
@@ -152,4 +168,34 @@ func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
 		}
 	}
 	return nil
+}
+
+func UpdateDBAndWait(client *mpd.Client, label string) error {
+	if _, err := client.Update(label); err != nil {
+		return fmt.Errorf("Failed to udpate Database: %w", err)
+	}
+	timeout := 30 * time.Second
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	timeoutChan := time.After(timeout)
+	for {
+		select {
+		case <-ticker.C:
+		if !DbUpdating(client) {
+			log.Println("Database update finished.")
+			return nil
+		}
+		case <-timeoutChan:
+			return fmt.Errorf("Database did not finish update within timeout")
+		}
+	}
+}
+
+func DbUpdating(client *mpd.Client) bool {
+	status, err := client.Status()
+	if err != nil {
+		return true
+	}
+	_, updating := status["updating_db"]
+    return updating
 }

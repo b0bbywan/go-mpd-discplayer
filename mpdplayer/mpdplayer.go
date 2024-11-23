@@ -44,24 +44,22 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 		}
 	}
 
-	// Execute the provided function
-	if err := loadFunc(rc.client); err != nil {
-		// Handle connection issues and retry
-		if isConnError(err) {
-			log.Printf("Connection error detected: %v. Reconnecting...", err)
-			if err := rc.Reconnect(); err != nil {
-				return fmt.Errorf("reconnection failed: %w", err)
+	for {
+		if err := loadFunc(rc.client); err != nil {
+			if isConnError(err) {
+				log.Printf("Connection error detected: %v. Reconnecting...", err)
+				if reconnectErr := rc.Reconnect(); reconnectErr != nil {
+					return fmt.Errorf("reconnection failed: %w", reconnectErr)
+				}
+				// After reconnection, retry loadFunc
+				continue
 			}
-
-			// Retry the function
-			if err := loadFunc(rc.client); err != nil {
-				return fmt.Errorf("function execution failed after reconnection: %w", err)
-			}
-		} else {
+			// For non-connection errors, return immediately
 			return fmt.Errorf("function execution error: %w", err)
 		}
+		// If loadFunc succeeds, break the loop
+		break
 	}
-
 	return nil
 }
 

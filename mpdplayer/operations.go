@@ -10,6 +10,8 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
+const CDDAPathPrefix = "cdda://"
+
 type PlaybackAction func(client *mpd.Client, device string) error
 
 func (rc *ReconnectingMPDClient) StartDiscPlayback(device string) error {
@@ -31,14 +33,17 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 }
 
 func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
+	return rc.StopPlayback(CDDAPathPrefix)
+}
+
+func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if !checkPathPlaying(client, "cdda://") {
-			return nil
+		if checkPathPlaying(client, label) {
+			if err := client.Stop(); err != nil {
+				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+			}
 		}
-		if err := client.Stop(); err != nil {
-			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-		}
-		return clearQueue(client)
+		return deleteFromPlaylist(client, label)
 	})
 }
 
@@ -55,7 +60,7 @@ func attemptToLoadCD(client *mpd.Client, device string) error {
 	if err = loadCDDATracks(client, device); err == nil {
 		return nil
 	}
-    return fmt.Errorf("failed to load CD, no valid CUE file and unable to load CDDA tracks: %w", err)
+	return fmt.Errorf("failed to load CD, no valid CUE file and unable to load CDDA tracks: %w", err)
 }
 
 // clearQueue clears the MPD playlist.
@@ -94,7 +99,7 @@ func loadCue(client *mpd.Client, device string) error {
 // addTracks adds individual CDDA tracks to the MPD playlist based on the specified track count.
 func addTracks(client *mpd.Client, trackCount int) error {
 	for track := 1; track <= trackCount; track++ {
-		if err := client.Add(fmt.Sprintf("cdda:///%d", track)); err != nil {
+		if err := client.Add(fmt.Sprintf("%s/%d", CDDAPathPrefix, track)); err != nil {
 			return fmt.Errorf("failed to add track %d: %w", track, err)
 		}
 	}
@@ -113,8 +118,38 @@ func checkPathPlaying(client *mpd.Client, checkPath string) bool {
 		return true
 	}
 
+	return checkSongPath(song, checkPath)
+}
+
+func checkSongPath(song mpd.Attrs, checkPath string) bool {
 	if path, ok := song["file"]; ok {
-		return strings.Contains(path, checkPath)
+		return strings.HasPrefix(path, checkPath)
 	}
 	return false
+}
+
+func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
+	playlist, err := client.PlaylistInfo(-1, -1)
+	if err != nil {
+		return fmt.Errorf("failed to fetch MPD playlist: %w", err)
+	}
+
+	start := -1 // Initialize start index to -1 to indicate no active range
+
+	for i := len(playlist) - 1; i >= -1; i-- {
+		if i >= 0 && checkSongPath(playlist[i], checkPath) {
+			// Start a new range if not already started
+			if start == -1 {
+				start = i
+			}
+		} else if start != -1 {
+			// End the current range and delete it
+			if err := client.Delete(i+1, start+1); err != nil {
+				return fmt.Errorf("failed to delete playlist range (%d, %d): %w", i+1, start, err)
+			}
+			log.Printf("info: Deleted songs from position %d to %d", i+1, start)
+			start = -1 // Reset start index
+		}
+	}
+	return nil
 }

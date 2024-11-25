@@ -36,7 +36,7 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 		go func() {
 			defer wg.Done()
 			if err := processor(device); err != nil {
-				fmt.Errorf("(%s) Failed to process action: %w", h.Name(), err)
+				log.Printf("[%s] Failed to process action: %v", h.Name(), err)
 				return
 			}
 		}()
@@ -44,14 +44,18 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 	}
 }
 
-func (h *EventHandler) Process(device *udev.Device) error {
-	if h.processFunc != nil && device != nil {
-		if err := h.processFunc(device); err != nil {
-			log.Printf("(%s) Failed to process device %s: %w", h.Name(), device.Devnode(), err)
-			return fmt.Errorf("(%s) Failed to process device %s: %w", h.Name(), device.Devnode(), err)
+func (h *EventHandler) Process(ctx context.Context, device *udev.Device) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("[%s] Skipping device %s due to context cancellation.", h.Name(), device.Devnode())
+	default:
+		if h.processFunc != nil && device != nil {
+			if err := h.processFunc(device); err != nil {
+				return fmt.Errorf("[%s] Failed to process device %s: %w", h.Name(), device.Devnode(), err)
+			}
 		}
+		return nil
 	}
-	return nil
 }
 
 func (h *EventHandler) Name() string {
@@ -62,14 +66,12 @@ func StartMonitor(ctx context.Context, handlers []*EventHandler) error {
 	u := udev.Udev{}
 	monitor := u.NewMonitorFromNetlink("udev")
 	if err := monitor.FilterAddMatchSubsystem("block"); err != nil {
-		log.Printf("Failed to add filter: %w", err)
 		return fmt.Errorf("Failed to add filter: %w", err)
 	}
 
 	// Start the monitor and get the device channel
 	deviceChan, errChan, err := monitor.DeviceChan(ctx)
 	if err != nil {
-		log.Printf("failed to create device channel: %w", err)
 		return fmt.Errorf("failed to create device channel: %w", err)
 	}
 
@@ -77,6 +79,35 @@ func StartMonitor(ctx context.Context, handlers []*EventHandler) error {
 
 	startEventPublisher(ctx, deviceChan, errChan, handlers)
 	return nil
+}
+
+func (h *EventHandler) StartSubscriber(wg *sync.WaitGroup, ctx context.Context) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[%s] Recovered from panic: %v", h.Name(), r)
+			}
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("[%s] Subscriber stopping...", h.Name())
+				return
+			case device := <-h.actionChan:
+				// Handle the event
+				log.Printf("[%s] Processing device %s...", h.Name(), device.Devnode())
+				wg.Add(1)
+				go func(*udev.Device) {
+					defer wg.Done()
+					if err := h.Process(ctx, device); err != nil {
+						log.Printf("[%s] Error processing device %s: %w", h.Name(), device.Devnode(), err)
+					}
+				}(device)
+			}
+		}
+	}()
 }
 
 func newBasicHandler(
@@ -89,21 +120,25 @@ func newBasicHandler(
 		deviceFilterFunc: func(device *udev.Device) bool {
 			return preChecker(device) && actionChecker(device, device.Action())
 		},
-		actionChan: make(chan *udev.Device),
+		actionChan: make(chan *udev.Device, 10),
 	}
 }
 
 func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, errChan <-chan error, handlers []*EventHandler) {
+	var wg sync.WaitGroup
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Publisher stopping...")
+			for _, handler := range handlers {
+				log.Printf("[%s] Publisher stopping...", handler.Name())
+				close(handler.actionChan)
+			}
+			wg.Wait()
 			return
 		case device := <-deviceChan:
 			for _, handler := range handlers {
-				if handler.DeviceFilter(device) {
-					handler.actionChan <- device
-				}
+				wg.Add(1)
+				go filterDevice(&wg, ctx, handler, device)
 			}
 		case err := <-errChan:
 			if err != nil {
@@ -113,26 +148,14 @@ func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, er
 	}
 }
 
-func (h *EventHandler) StartSubscriber(ctx context.Context) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("Recovered from panic: %v", r)
-			}
-		}()
-		for {
-			select {
-			case <-ctx.Done():
-				log.Printf("(%s) Subscriber stopping...", h.Name())
-				close(h.actionChan)  // Close the channel on shutdown
-				return
-			case device := <-h.actionChan:
-				// Handle the event
-				if err := h.Process(device); err != nil {
-					log.Printf("(%s) Failed to process device %s: %w", h.Name(), device.Sysname(), err)
-					continue
-				}
-			}
-		}
-	}()
+func filterDevice(wg *sync.WaitGroup, ctx context.Context, h *EventHandler, d *udev.Device) {
+    defer wg.Done()
+    if h.DeviceFilter(d) {
+        select {
+        case <-ctx.Done():
+            log.Printf("[%s] Device %s filter canceled by context.", h.Name(), d.Devnode())
+        case h.actionChan <- d:
+            log.Printf("[%s] Device %s passed filter and sent to handler.", h.Name(), d.Devnode())
+        }
+    }
 }

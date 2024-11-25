@@ -63,7 +63,7 @@ func Run() error {
 	handlers = append(handlers, newDiscHandlers(&wg, mpdClient)...)
 	handlers = append(handlers, newUSBHandlers(&wg, mpdClient)...)
 	for _, handler := range handlers {
-		handler.StartSubscriber(ctx) // Use the passed context
+		handler.StartSubscriber(&wg, ctx) // Use the passed context
 	}
 
 	// Start event monitoring (publish events to handlers)

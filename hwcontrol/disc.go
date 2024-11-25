@@ -63,7 +63,9 @@ func onAddDiscChecker(device *udev.Device) bool {
 
 // discPreChecker ensures the device is valid and matches the target device.
 func discPreChecker(device *udev.Device) bool {
-	if device == nil || device.PropertyValue("ID_CDROM") != "1"{
+	if device == nil ||
+	device.PropertyValue("ID_CDROM") != "1" ||
+	device.PropertyValue("ID_FS_TYPE") != "" {
 		return false
 	}
 	return true

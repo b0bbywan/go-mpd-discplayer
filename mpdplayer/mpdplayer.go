@@ -1,6 +1,7 @@
 package mpdplayer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -16,12 +17,14 @@ type ReconnectingMPDClient struct {
 	mpcConfig		config.MPDConn
 	client			*mpd.Client
 	mu				sync.Mutex
+	ctx				context.Context
 }
 
 // NewReconnectingMPDClient creates a new instance of ReconnectingMPDClient.
-func NewReconnectingMPDClient(mpcConfig config.MPDConn) *ReconnectingMPDClient {
+func NewReconnectingMPDClient(ctx context.Context, mpcConfig config.MPDConn) *ReconnectingMPDClient {
 	return &ReconnectingMPDClient{
-		mpcConfig: mpcConfig,
+		mpcConfig:	mpcConfig,
+		ctx:		ctx,
 	}
 }
 
@@ -98,7 +101,14 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 		// Calculate wait time with exponential backoff, capped by reconnectWait
 		log.Printf("Retrying connection in %s: %w", waitTime, err)
-		time.Sleep(waitTime)
+		// Wait for the exponential backoff period, checking context for cancellation
+
+		select {
+		case <-rc.ctx.Done():
+			log.Println("Reconnection attempt canceled by context.")
+			return rc.ctx.Err()
+		case <-time.After(waitTime): // Sleep for the calculated retry interval
+		}
 	}
 	return fmt.Errorf("failed to connect to MPD server after %s: %w", rc.mpcConfig.ReconnectWait, err)
 }

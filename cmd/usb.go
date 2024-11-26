@@ -30,6 +30,7 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 			}
 			return nil
 		},
+		newAddNotification(),
 	)
 
 	handlers[1].SetProcessor(
@@ -47,6 +48,7 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 			}
 			return nil
 		},
+		newRemoveNotification(),
 	)
 
 	return handlers

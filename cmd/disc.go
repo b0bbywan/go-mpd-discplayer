@@ -16,25 +16,34 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 	handlers := hwcontrol.NewBasicDiscHandlers()
 
 	// Define action for the "add" event (handler[0])
-	handlers[0].SetProcessor(wg, "Starting Disc Playback", func(device *udev.Device) error {
-		if err := hwcontrol.SetDiscSpeed(device.Devnode(), 12); err != nil {
-			log.Printf("Error setting disc speed on %s: %w", device.Devnode(), err)
-		}
-		if err := mpdClient.StartDiscPlayback(device.Devnode()); err != nil {
-			log.Printf("Error starting playback: %w", err)
-			return fmt.Errorf("Error starting playback: %w", err)
-		}
-		return nil
-	})
+	handlers[0].SetProcessor(
+		wg,
+		fmt.Sprintf("[%s] Starting Disc Playback", handlers[0].Name()),
+		func(device *udev.Device) error {
+			if err := hwcontrol.SetDiscSpeed(device.Devnode(), 12); err != nil {
+				log.Printf("Error setting disc speed on %s: %w", device.Devnode(), err)
+			}
+			if err := mpdClient.StartDiscPlayback(device.Devnode()); err != nil {
+				return fmt.Errorf("Error starting playback: %w", err)
+			}
+			return nil
+		},
+		newAddNotification(),
+	)
 
 	// Define action for the "remove" event (handler[1])
-	handlers[1].SetProcessor(wg, "Stopping Disc Playback", func(device *udev.Device) error {
-		if err := mpdClient.StopDiscPlayback(); err != nil {
-			log.Printf("Error stopping playback: %w", err)
-			return fmt.Errorf("Error stopping playback: %w", err)
-		}
-		return nil
-	})
+	handlers[1].SetProcessor(
+		wg,
+		fmt.Sprintf("[%s] Stopping Disc Playback", handlers[1].Name()),
+		func(device *udev.Device) error {
+			if err := mpdClient.StopDiscPlayback(); err != nil {
+				log.Printf("Error stopping playback: %w", err)
+				return fmt.Errorf("Error stopping playback: %w", err)
+			}
+			return nil
+		},
+		newRemoveNotification(),
+	)
 
 	return handlers
 }

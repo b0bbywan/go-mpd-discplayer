@@ -1,6 +1,7 @@
 package mpdplayer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -16,12 +17,14 @@ type ReconnectingMPDClient struct {
 	mpcConfig		config.MPDConn
 	client			*mpd.Client
 	mu				sync.Mutex
+	ctx				context.Context
 }
 
 // NewReconnectingMPDClient creates a new instance of ReconnectingMPDClient.
-func NewReconnectingMPDClient(mpcConfig config.MPDConn) *ReconnectingMPDClient {
+func NewReconnectingMPDClient(ctx context.Context, mpcConfig config.MPDConn) *ReconnectingMPDClient {
 	return &ReconnectingMPDClient{
-		mpcConfig: mpcConfig,
+		mpcConfig:	mpcConfig,
+		ctx:		ctx,
 	}
 }
 
@@ -44,24 +47,22 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 		}
 	}
 
-	// Execute the provided function
-	if err := loadFunc(rc.client); err != nil {
-		// Handle connection issues and retry
-		if isConnError(err) {
-			log.Printf("Connection error detected: %v. Reconnecting...", err)
-			if err := rc.Reconnect(); err != nil {
-				return fmt.Errorf("reconnection failed: %w", err)
+	for {
+		if err := loadFunc(rc.client); err != nil {
+			if isConnError(err) {
+				log.Printf("Connection error detected: %v. Reconnecting...", err)
+				if reconnectErr := rc.Reconnect(); reconnectErr != nil {
+					return fmt.Errorf("reconnection failed: %w", reconnectErr)
+				}
+				// After reconnection, retry loadFunc
+				continue
 			}
-
-			// Retry the function
-			if err := loadFunc(rc.client); err != nil {
-				return fmt.Errorf("function execution failed after reconnection: %w", err)
-			}
-		} else {
+			// For non-connection errors, return immediately
 			return fmt.Errorf("function execution error: %w", err)
 		}
+		// If loadFunc succeeds, break the loop
+		break
 	}
-
 	return nil
 }
 
@@ -100,7 +101,14 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 		// Calculate wait time with exponential backoff, capped by reconnectWait
 		log.Printf("Retrying connection in %s: %w", waitTime, err)
-		time.Sleep(waitTime)
+		// Wait for the exponential backoff period, checking context for cancellation
+
+		select {
+		case <-rc.ctx.Done():
+			log.Println("Reconnection attempt canceled by context.")
+			return rc.ctx.Err()
+		case <-time.After(waitTime): // Sleep for the calculated retry interval
+		}
 	}
 	return fmt.Errorf("failed to connect to MPD server after %s: %w", rc.mpcConfig.ReconnectWait, err)
 }

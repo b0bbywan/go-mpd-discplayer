@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/b0bbywan/go-mpd-discplayer/cmd"
+	"github.com/b0bbywan/go-mpd-discplayer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 func main() {
@@ -20,23 +27,35 @@ func main() {
 		log.Fatalf("Cannot use --play and --stop together. Choose one.")
 	}
 
+	// Initialize context and WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, config.MPDConnection)
+
+	var wg sync.WaitGroup
+	defer cleanUp(&wg, ctx, mpdClient)
+
+	// Signal handling goroutine to cleanly stop the program
+	wg.Add(1)
+	go signalMonitor(&wg, cancel)
+
 	// Handle flags
 	if *playFlag {
-		if err := cmd.ExecuteAction(cmd.ActionPlay); err != nil {
-			log.Fatalf("Failed to start playback: %w", err)
+		if err := cmd.ExecuteAction(mpdClient, cmd.ActionPlay); err != nil {
+			log.Fatalf("Failed to start playback: %v", err)
 		}
 		return
 	}
 	if *stopFlag {
-		if err := cmd.ExecuteAction(cmd.ActionStop); err != nil {
-			log.Fatalf("Failed to stop playback: %w", err)
+		if err := cmd.ExecuteAction(mpdClient, cmd.ActionStop); err != nil {
+			log.Fatalf("Failed to stop playback: %v", err)
 		}
 		return
 	}
 
 	// Default behavior
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("error: %w", err)
+	if err := cmd.Run(&wg, ctx, mpdClient); err != nil {
+		log.Fatalf("error: %v", err)
 	}
 }
 
@@ -48,4 +67,30 @@ func usage() {
     fmt.Println("  --play   Start playback immediately")
     fmt.Println("  --stop   Stop playback immediately")
     fmt.Println("  -h, --help   Display this help message")
+}
+
+func signalMonitor(wg *sync.WaitGroup, cancel context.CancelFunc) {
+	defer wg.Done()
+	// Handle OS signals to gracefully stop the program
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+	for range sigChan {
+		log.Println("Received termination signal. Exiting...")
+		cancel()
+		return
+	}
+}
+
+func cleanUp(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) {
+	<-ctx.Done()
+
+	// Cleanup after receiving the termination signal
+	if mpdClient != nil {
+		mpdClient.Disconnect()
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+	log.Println("All tasks completed. Exiting...")
 }

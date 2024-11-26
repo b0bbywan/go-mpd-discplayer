@@ -99,9 +99,9 @@ If a configuration file is not provided, you can use environment variables to se
 | `DISC_CUER_GNUHELLOEMAIL`     | `gnuHelloEmail`.      | *(no default,  empty value disable the integration)*      |
 | `DISC_CUER_GNUDBURL`          | `gnuDbUrl`.           | `http://gnudb.gnudb.org`    |
 | `DISC_CUER_CACHELOCATION`     | `cacheLocation`.      | `/var/cache/disc-cuer` *for root* / `~/.cache/disc-cuer` *for standard users*      |
-| `MPD_DISCPLAYER_TYPE`         | `MPDConnection.Type`. | `tcp`                        |
-| `MPD_DISCPLAYER_ADDRESS`      | `MPDConnection.Address`. | `127.0.0.1:6600`   |
-| `MPD_DISCPLAYER_RECONNECT_WAIT`      | `MPDConnection.ReconnectWait`. | `30` (in seconds)          |
+| `MPD_DISCPLAYER_MPDCONNECTION_TYPE`         | `MPDConnection.Type`. | `tcp`                        |
+| `MPD_DISCPLAYER_MPDCONNECTION_ADDRESS`      | `MPDConnection.Address`. | `127.0.0.1:6600`   |
+| `MPD_DISCPLAYER_MPDCONNECTION_RECONNECTWAIT`      | `MPDConnection.ReconnectWait`. | `30` (in seconds)          |
 | `MPD_DISCPLAYER_TARGET_DEVICE` | `TargetDevice` | `sr0`
 
 

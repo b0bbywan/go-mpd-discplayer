@@ -63,7 +63,9 @@ func onAddDiscChecker(device *udev.Device) bool {
 
 // discPreChecker ensures the device is valid and matches the target device.
 func discPreChecker(device *udev.Device) bool {
-	if device == nil || device.PropertyValue("ID_CDROM") != "1"{
+	if device == nil ||
+	device.PropertyValue("ID_CDROM") != "1" ||
+	device.PropertyValue("ID_FS_TYPE") != "" {
 		return false
 	}
 	return true
@@ -84,7 +86,7 @@ func GetTrackCount(device string) (int, error) {
 
 func SetDiscSpeed(device string, speed int) error {
 	// Open the device
-	file, err := os.OpenFile(device, os.O_RDWR, 0)
+	file, err := os.OpenFile(device, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open device: %w", err)
 	}

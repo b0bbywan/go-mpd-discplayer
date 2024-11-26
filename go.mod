@@ -5,12 +5,15 @@ go 1.19
 require (
 	github.com/b0bbywan/go-disc-cuer v0.3.0
 	github.com/fhs/gompd/v2 v2.3.0
+	github.com/hajimehoshi/go-mp3 v0.3.0
+	github.com/hajimehoshi/oto/v2 v2.4.2
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/spf13/viper v1.19.0
 	golang.org/x/sys v0.27.0
 )
 
 require (
+	github.com/ebitengine/purego v0.4.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 // indirect

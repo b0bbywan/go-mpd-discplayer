@@ -27,7 +27,6 @@ func main() {
 		flag.Usage()
 		log.Fatalf("Cannot use --play and --stop together. Choose one.")
 	}
-
 	// Initialize context and WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

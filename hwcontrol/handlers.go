@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/jochenvg/go-udev"
+	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
 const (
@@ -29,13 +30,20 @@ func (h *EventHandler) DeviceFilter(device *udev.Device) bool {
 	return false
 }
 
-func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error) {
+func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error, notifier notifications.Notifier) {
 	h.processFunc = func(device *udev.Device) error {
 		log.Println(actionLog)
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
+			if notifier != nil {
+				notifier.PlaySuccess()
+			}
+
 			defer wg.Done()
 			if err := processor(device); err != nil {
+				if notifier != nil {
+					notifier.PlayError()
+				}
 				log.Printf("[%s] Failed to process action: %v", h.Name(), err)
 				return
 			}

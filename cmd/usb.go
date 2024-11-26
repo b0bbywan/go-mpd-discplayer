@@ -40,12 +40,14 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 		wg,
 		fmt.Sprintf("[%s] Starting USB playback", handlers[0].Name()),
 		startUSBPlayback,
+		newAddNotification(),
 	)
 
 	handlers[1].SetProcessor(
 		wg,
 		fmt.Sprintf("[%s] Stopping USB playback", handlers[1].Name()),
 		stopUSBPlayback,
+		newRemoveNotification(),
 	)
 
 	return handlers

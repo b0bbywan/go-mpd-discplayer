@@ -20,6 +20,7 @@ func main() {
 	flag.Usage = usage
 	playFlag := flag.Bool(cmd.ActionPlay, false, "Start playback immediately")
 	stopFlag := flag.Bool(cmd.ActionStop, false, "Stop playback immediately")
+	deviceFlag := flag.String("device", "/dev/sr0", "Disc Device")
 	flag.Parse()
 
 	if *playFlag && *stopFlag {
@@ -40,13 +41,13 @@ func main() {
 
 	// Handle flags
 	if *playFlag {
-		if err := cmd.ExecuteAction(mpdClient, cmd.ActionPlay); err != nil {
+		if err := cmd.ExecuteAction(mpdClient, *deviceFlag, cmd.ActionPlay); err != nil {
 			log.Fatalf("Failed to start playback: %v", err)
 		}
 		return
 	}
 	if *stopFlag {
-		if err := cmd.ExecuteAction(mpdClient, cmd.ActionStop); err != nil {
+		if err := cmd.ExecuteAction(mpdClient, *deviceFlag, cmd.ActionStop); err != nil {
 			log.Fatalf("Failed to stop playback: %v", err)
 		}
 		return
@@ -65,6 +66,7 @@ func usage() {
     fmt.Println("Options:")
     fmt.Println("  --play   Start playback immediately")
     fmt.Println("  --stop   Stop playback immediately")
+    fmt.Println("  --device <device>	Device to use (only with play) (default /dev/sr0)")
     fmt.Println("  -h, --help   Display this help message")
 }
 

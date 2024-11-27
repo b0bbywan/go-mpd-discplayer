@@ -3,7 +3,7 @@ module github.com/b0bbywan/go-mpd-discplayer
 go 1.19
 
 require (
-	github.com/b0bbywan/go-disc-cuer v0.2.6
+	github.com/b0bbywan/go-disc-cuer v0.2.7-0.20241127153104-0169ade3c032
 	github.com/fhs/gompd/v2 v2.3.0
 	github.com/gopxl/beep v1.1.0
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b

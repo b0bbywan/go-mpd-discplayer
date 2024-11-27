@@ -21,10 +21,10 @@ var (
 )
 
 // executeAction handles the main logic for each action (add or remove).
-func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, action string) error {
+func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action string) error {
 	switch action {
 		case ActionPlay:
-			if err := mpdClient.StartDiscPlayback(config.TargetDevice); err != nil {
+			if err := mpdClient.StartDiscPlayback(device); err != nil {
 				return fmt.Errorf("Error adding tracks: %w", err)
 			}
 			return nil

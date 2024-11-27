@@ -60,13 +60,13 @@ func main() {
 }
 
 func usage() {
-    fmt.Println("Usage:")
-    fmt.Println("  mpd-discplayer [options]")
-    fmt.Println("")
-    fmt.Println("Options:")
-    fmt.Println("  --play   Start playback immediately")
-    fmt.Println("  --stop   Stop playback immediately")
-    fmt.Println("  -h, --help   Display this help message")
+	fmt.Println("Usage:")
+	fmt.Println("  mpd-discplayer [options]")
+	fmt.Println("")
+	fmt.Println("Options:")
+	fmt.Println("  --play   Start playback immediately")
+	fmt.Println("  --stop   Stop playback immediately")
+	fmt.Println("  -h, --help   Display this help message")
 }
 
 func signalMonitor(wg *sync.WaitGroup, cancel context.CancelFunc) {

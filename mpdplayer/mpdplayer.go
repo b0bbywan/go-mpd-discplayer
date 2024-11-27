@@ -9,22 +9,23 @@ import (
 	"time"
 
 	"github.com/fhs/gompd/v2/mpd"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 // ReconnectingMPDClient wraps gompd's MPD client and adds reconnection logic.
 type ReconnectingMPDClient struct {
-	mpcConfig		config.MPDConn
-	client			*mpd.Client
-	mu				sync.Mutex
-	ctx				context.Context
+	mpcConfig config.MPDConn
+	client    *mpd.Client
+	mu        sync.Mutex
+	ctx       context.Context
 }
 
 // NewReconnectingMPDClient creates a new instance of ReconnectingMPDClient.
 func NewReconnectingMPDClient(ctx context.Context, mpcConfig config.MPDConn) *ReconnectingMPDClient {
 	return &ReconnectingMPDClient{
-		mpcConfig:	mpcConfig,
-		ctx:		ctx,
+		mpcConfig: mpcConfig,
+		ctx:       ctx,
 	}
 }
 

@@ -10,16 +10,16 @@ import (
 )
 
 const (
-	EventAdd	= "add"
+	EventAdd    = "add"
 	EventChange = "change"
-	EventRemove	= "remove"
+	EventRemove = "remove"
 )
 
 type EventHandler struct {
-	name				string
-	deviceFilterFunc	func(*udev.Device) bool
-	actionChan			chan *udev.Device
-	processFunc			func(*udev.Device) error // Action to execute
+	name             string
+	deviceFilterFunc func(*udev.Device) bool
+	actionChan       chan *udev.Device
+	processFunc      func(*udev.Device) error // Action to execute
 }
 
 func (h *EventHandler) DeviceFilter(device *udev.Device) bool {
@@ -129,11 +129,7 @@ func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, er
 	for {
 		select {
 		case <-ctx.Done():
-			for _, handler := range handlers {
-				log.Printf("[%s] Publisher stopping...", handler.Name())
-				close(handler.actionChan)
-			}
-			wg.Wait()
+			closeEventPublisher(&wg, handlers)
 			return
 		case device := <-deviceChan:
 			for _, handler := range handlers {
@@ -148,14 +144,22 @@ func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, er
 	}
 }
 
+func closeEventPublisher(wg *sync.WaitGroup, handlers []*EventHandler) {
+	for _, handler := range handlers {
+		log.Printf("[%s] Publisher stopping...", handler.Name())
+		close(handler.actionChan)
+	}
+	wg.Wait()
+}
+
 func filterDevice(wg *sync.WaitGroup, ctx context.Context, h *EventHandler, d *udev.Device) {
-    defer wg.Done()
-    if h.DeviceFilter(d) {
-        select {
-        case <-ctx.Done():
-            log.Printf("[%s] Device %s filter canceled by context.", h.Name(), d.Devnode())
-        case h.actionChan <- d:
-            log.Printf("[%s] Device %s passed filter and sent to handler.", h.Name(), d.Devnode())
-        }
-    }
+	defer wg.Done()
+	if h.DeviceFilter(d) {
+		select {
+		case <-ctx.Done():
+			log.Printf("[%s] Device %s filter canceled by context.", h.Name(), d.Devnode())
+		case h.actionChan <- d:
+			log.Printf("[%s] Device %s passed filter and sent to handler.", h.Name(), d.Devnode())
+		}
+	}
 }

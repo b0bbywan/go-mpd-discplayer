@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 	"time"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -16,26 +17,22 @@ const (
 	ActionStop = "stop"
 )
 
-var (
-	MPDConnection   = config.MPDConnection
-)
-
 // executeAction handles the main logic for each action (add or remove).
 func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, action string) error {
 	switch action {
-		case ActionPlay:
-			if err := mpdClient.StartDiscPlayback(config.TargetDevice); err != nil {
-				return fmt.Errorf("Error adding tracks: %w", err)
-			}
-			return nil
-		case ActionStop:
-			if err := mpdClient.StopDiscPlayback(); err != nil {
-				return fmt.Errorf("Error adding tracks: %w", err)
-			}
-			return nil
-		default:
-			return fmt.Errorf("Unknown action: %s", action)
+	case ActionPlay:
+		if err := mpdClient.StartDiscPlayback(config.TargetDevice); err != nil {
+			return fmt.Errorf("Error adding tracks: %w", err)
 		}
+		return nil
+	case ActionStop:
+		if err := mpdClient.StopDiscPlayback(); err != nil {
+			return fmt.Errorf("Error adding tracks: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("Unknown action: %s", action)
+	}
 
 	return nil
 }
@@ -59,7 +56,7 @@ func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.Reconnect
 func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHandler) {
 	defer wg.Done()
 	for {
-	select {
+		select {
 		case <-ctx.Done():
 			log.Println("Stopping from cmd.")
 			return

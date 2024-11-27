@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fhs/gompd/v2/mpd"
+
 	"github.com/b0bbywan/go-disc-cuer/cue"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
@@ -197,5 +198,5 @@ func DbUpdating(client *mpd.Client) bool {
 		return true
 	}
 	_, updating := status["updating_db"]
-    return updating
+	return updating
 }

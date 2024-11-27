@@ -137,11 +137,7 @@ func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, er
 	for {
 		select {
 		case <-ctx.Done():
-			for _, handler := range handlers {
-				log.Printf("[%s] Publisher stopping...", handler.Name())
-				close(handler.actionChan)
-			}
-			wg.Wait()
+			closeEventPublisher(&wg, handlers)
 			return
 		case device := <-deviceChan:
 			for _, handler := range handlers {
@@ -154,6 +150,14 @@ func startEventPublisher(ctx context.Context, deviceChan <-chan *udev.Device, er
 			}
 		}
 	}
+}
+
+func closeEventPublisher(wg *sync.WaitGroup, handlers []*EventHandler) {
+	for _, handler := range handlers {
+		log.Printf("[%s] Publisher stopping...", handler.Name())
+		close(handler.actionChan)
+	}
+	wg.Wait()
 }
 
 func filterDevice(wg *sync.WaitGroup, ctx context.Context, h *EventHandler, d *udev.Device) {

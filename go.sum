@@ -1,6 +1,6 @@
 github.com/DATA-DOG/go-sqlmock v1.3.3/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
-github.com/b0bbywan/go-disc-cuer v0.2.6 h1:j+iSEflCmHssuor3gayLrXgq+GKRpUyvIOfFs8wNz08=
-github.com/b0bbywan/go-disc-cuer v0.2.6/go.mod h1:L2zxO/Yp+MRbcSqy3JI2q1YXvgixh2eiFo+GsdXJsS0=
+github.com/b0bbywan/go-disc-cuer v0.2.7-0.20241127153104-0169ade3c032 h1:hjaMYXODqr3z4bEw9C3n1GJBEzKbwpg45EdsU9eCXxM=
+github.com/b0bbywan/go-disc-cuer v0.2.7-0.20241127153104-0169ade3c032/go.mod h1:L2zxO/Yp+MRbcSqy3JI2q1YXvgixh2eiFo+GsdXJsS0=
 github.com/d4l3k/messagediff v1.2.2-0.20190829033028-7e0a312ae40b/go.mod h1:Oozbb1TVXFac9FtSIxHBMnBCq2qeH/2KkEQxENCrlLo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

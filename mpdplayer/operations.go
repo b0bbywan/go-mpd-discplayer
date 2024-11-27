@@ -8,6 +8,7 @@ import (
 
 	"github.com/fhs/gompd/v2/mpd"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
@@ -88,7 +89,7 @@ func loadCDDATracks(client *mpd.Client, device string) error {
 }
 
 func loadCue(client *mpd.Client, device string) error {
-	cueFilePath, err := cue.GenerateDefaultFromDisc(device)
+	cueFilePath, err := cue.GenerateDefaultFromDisc(device, config.CuerConfig)
 	if err != nil || cueFilePath == "" {
 		fmt.Printf("failed to generate CUE file: %v", err)
 		return fmt.Errorf("failed to generate CUE file: %w", err)

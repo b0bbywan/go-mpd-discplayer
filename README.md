@@ -7,7 +7,8 @@
 
 ## Features
 
-- **Disc Playback Automation**: Monitors for inserted audio discs and generates CUE files using go-disc-cuer.
+- **Disc Playback Automation**: Monitors for inserted audio discs and generates CUE files using go-disc-cuer before playing on mpd server
+- **USB disk Playback Automation**: Monitors removable usb media to play them on mpd.server
 - **Reconnection Logic**: Automatically reconnects to the MPD server if the connection is lost.
 - **Configurable Settings**: Supports configuration via a unified config file or environment variables.
 - **Reliable Connection Management**: Thread-safe operations to manage MPD client connections and operations.
@@ -61,22 +62,22 @@ Visit [go-disc-cuer](https://github.com/b0bbywan/go-disc-cuer/) for more informa
 ### Configuration File
 
 The configuration file is expected in one of the following locations:
-1. `/etc/disc-cuer/config.yml` (system-wide configuration)
-2. `~/.config/disc-cuer/config.yml` (user-specific configuration)
+1. `/etc/mpd-discplayer/config.yml` (system-wide configuration)
+2. `~/.config/mpd-discplayer/config.yml` (user-specific configuration)
 
 The file should be written in YAML format, and a sample structure is shown below:
 
 ```yaml
 gnuHelloEmail: "your-email@example.com"
 gnuDbUrl: "https://gnudb.gnudb.org"
-cacheLocation: "/var/cache/disc-cuer"
 
 MPDConnection:
   Type: "tcp"
   Address: "127.0.0.1:6600"
   ReconnectWait: 30
+MPDLibraryFolder: "/var/lib/mpd/music"
+DiscSpeed: 12
 
-TargetDevice: "sr0"
 ```
 
 #### MPD Connection Options
@@ -96,20 +97,20 @@ If a configuration file is not provided, you can use environment variables to se
 
 | Environment Variable           | YAML equivalent                          | Default Value                  |
 |--------------------------------|--------------------------------------|--------------------------------|
-| `DISC_CUER_GNUHELLOEMAIL`     | `gnuHelloEmail`.      | *(no default,  empty value disable the integration)*      |
-| `DISC_CUER_GNUDBURL`          | `gnuDbUrl`.           | `http://gnudb.gnudb.org`    |
-| `DISC_CUER_CACHELOCATION`     | `cacheLocation`.      | `/var/cache/disc-cuer` *for root* / `~/.cache/disc-cuer` *for standard users*      |
+| `MPD_DISCPLAYER_GNUHELLOEMAIL`     | `gnuHelloEmail`.      | *(no default,  empty value disable the integration)*      |
+| `MPD_DISCPLAYER_GNUDBURL`          | `gnuDbUrl`.           | `https://gnudb.gnudb.org`    |
 | `MPD_DISCPLAYER_MPDCONNECTION_TYPE`         | `MPDConnection.Type`. | `tcp`                        |
 | `MPD_DISCPLAYER_MPDCONNECTION_ADDRESS`      | `MPDConnection.Address`. | `127.0.0.1:6600`   |
 | `MPD_DISCPLAYER_MPDCONNECTION_RECONNECTWAIT`      | `MPDConnection.ReconnectWait`. | `30` (in seconds)          |
-| `MPD_DISCPLAYER_TARGET_DEVICE` | `TargetDevice` | `sr0`
+| `MPD_DISCPLAYER_MPDLIBRARYFOLDER` | `MPDLibraryFolder` | `/var/lib/mpd/music`
+| `MPD_DISCPLAYER_DISCSPEED` | `DiscSpeed` | `12`
 
 
 #### Priority of Configuration
 The configuration is loaded in the following order of priority:
 - Environment variables (highest priority)
-- User-specific configuration file (~/.config/disc-cuer/config.yml)
-- System-wide configuration file (/etc/disc-cuer/config.yml)
+- User-specific configuration file (~/.config/mpd-discplayer/config.yml)
+- System-wide configuration file (/etc/mpd-discplayer/config.yml)
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.

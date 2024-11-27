@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	AppName = "mpd-discplayer"
+	AppName		= "mpd-discplayer"
+	AppVersion	= "0.4"
 )
 
 type MPDConn struct {
@@ -23,16 +24,19 @@ type MPDConn struct {
 }
 
 var (
-	MPDConnection	MPDConn
-	TargetDevice	string
-	DiscSpeed		int
+	MPDConnection    MPDConn
+	MPDLibraryFolder string
+	TargetDevice     string
+	DiscSpeed        int
+	SoundsLocation   string
+	CuerConfig       *config.Config
 )
 
 func init() {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
-	viper.SetDefault("TargetDevice", "/dev/sr0")
+	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
 	viper.SetDefault("DiscSpeed", 12)
 
 	// Load from configuration file, environment variables, and CLI flags
@@ -40,7 +44,7 @@ func init() {
 	viper.SetConfigType("yaml")    // config file format
 	viper.AddConfigPath(filepath.Join("/etc", config.AppName))  // Global configuration path
 	if home, err := os.UserHomeDir(); err == nil {
-		viper.AddConfigPath(filepath.Join(home, ".config", config.AppName)) // User config path
+		viper.AddConfigPath(filepath.Join(home, ".config", AppName)) // User config path
 	}
 
 	// Environment variable support
@@ -56,7 +60,6 @@ func init() {
 		}
 	}
 
-	TargetDevice = viper.GetString("TargetDevice")
 	DiscSpeed = viper.GetInt("DiscSpeed")
 	// Populate the MPDConnection struct
 	MPDConnection = MPDConn{
@@ -66,6 +69,11 @@ func init() {
 	}
 	if err = validateMPDConnection(MPDConnection); err != nil {
 		log.Fatalf("Error validating MPD Connection: %w", err)
+	}
+	MPDLibraryFolder = viper.GetString("MPDLibraryFolder")
+	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, ".disc-cuer"))
+	if err != nil {
+		log.Fatalf("Failed to create disc-cuer config: %w", err)
 	}
 }
 

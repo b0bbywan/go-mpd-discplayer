@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/b0bbywan/go-disc-cuer v0.3.0
 	github.com/fhs/gompd/v2 v2.3.0
+	github.com/hanwen/go-fuse/v2 v2.7.1
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/spf13/viper v1.19.0
 	golang.org/x/sys v0.27.0

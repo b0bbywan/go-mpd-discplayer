@@ -9,42 +9,28 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hanwen/go-fuse/v2/fuse"
+
+	"github.com/b0bbywan/go-mpd-discplayer/config"
+)
+
+const (
+	RetryTimeout  = 3 * time.Second
+	RetryInterval = 300 * time.Millisecond
 )
 
 type MountPointCache struct {
 	mountPoints map[string]string
+	fuseMounts  map[string]*fuse.Server
 	mu          sync.RWMutex
 }
 
+type Finder interface {
+	Find(source string) (string, error)
+}
+
 var MountPointsCache = newMountPointCache()
-
-func SeekMountPointAndClearCache(device string) (string, error) {
-	defer MountPointsCache.Remove(device)
-	if mountPoint, err := seekMountPoint(device); err == nil {
-		return mountPoint, nil
-	}
-	return MountPointsCache.Get(device)
-
-}
-
-func FindMountPointAndAddtoCache(device string) (string, error) {
-	timeout := 3 * time.Second
-	ticker := time.NewTicker(300 * time.Millisecond)
-	defer ticker.Stop()
-	timeoutChan := time.After(timeout)
-	for {
-		if mountPoint, err := seekMountPoint(device); err == nil {
-			MountPointsCache.Add(device, mountPoint)
-			return mountPoint, nil
-		}
-		select {
-		case <-ticker.C:
-			log.Printf("Polling for %s mount point...", device)
-		case <-timeoutChan:
-			return "", fmt.Errorf("Device %s not found within timeout", device)
-		}
-	}
-}
 
 func newMountPointCache() *MountPointCache {
 	m := &MountPointCache{
@@ -76,6 +62,61 @@ func (m *MountPointCache) Get(device string) (string, error) {
 		return mountPoint, nil
 	}
 	return "", fmt.Errorf("%s mount point does not exist in cache", device)
+}
+
+func SeekMountPointAndClearCache(device string) (string, error) {
+	path, err := MountPointsCache.Get(device)
+	if err == nil {
+		go clearCache(device, path)
+		return path, nil
+	}
+	return "", fmt.Errorf("Device %s not in cache: %w", device, err)
+}
+
+func clearCache(device, path string) {
+	MountPointsCache.Remove(device)
+}
+
+func FindRelPath(device string, pathGetter func(string) (string, error)) (string, error) {
+	mountPoint, err := pathGetter(device)
+	if err != nil {
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+	}
+	relPath, err := filepath.Rel(mountPoint, config.MPDLibraryFolder)
+	if err != nil {
+		return "", fmt.Errorf("Found mountpoint %s for device %s not in MPDLibraryFolder: %w", mountPoint, device, err)
+	}
+	return relPath, nil
+
+}
+
+func FindDevicePathAndCache(device string, validator func(string) string) (string, error) {
+	mountPoint, err := findMountPointWithRetry(device, RetryTimeout, RetryInterval)
+	if err != nil {
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+	}
+	validatedPath := validator(mountPoint)
+	MountPointsCache.Add(device, validatedPath)
+	return validatedPath, nil
+}
+
+func findMountPointWithRetry(device string, timeout, interval time.Duration) (string, error) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	timeoutChan := time.After(timeout)
+	for {
+		if mountPoint, err := seekMountPoint(device); err == nil {
+			MountPointsCache.Add(device, mountPoint)
+			return mountPoint, nil
+		}
+		select {
+		case <-ticker.C:
+			log.Printf("Polling for %s mount point...", device)
+		case <-timeoutChan:
+			return "", fmt.Errorf("Device %s not found within timeout", device)
+		}
+	}
+
 }
 
 func isRemovablePath(devnode, mountPoint string) bool {
@@ -145,4 +186,18 @@ func populateMountPointCache(m *MountPointCache) {
 	}); err != nil {
 		log.Printf("Failed to populate mount point cache: %v", err)
 	}
+}
+
+func validateAndPreparePath(source string, callback func(string, string) error) string {
+	if strings.HasPrefix(source, config.MPDLibraryFolder) {
+		return source // Already valid
+	}
+
+	target := filepath.Join(config.MPDLibraryFolder, filepath.Base(source))
+	if err := callback(source, target); err != nil {
+		log.Printf("Failed to create symlink for %s: %v", source, err)
+		return source // Fallback to the original path
+	}
+
+	return target
 }

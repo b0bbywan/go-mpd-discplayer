@@ -9,6 +9,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/b0bbywan/go-mpd-discplayer/config"
+)
+
+const (
+	RetryTimeout  = 3 * time.Second
+	RetryInterval = 300 * time.Millisecond
 )
 
 type MountPointCache struct {
@@ -19,17 +26,60 @@ type MountPointCache struct {
 var MountPointsCache = newMountPointCache()
 
 func SeekMountPointAndClearCache(device string) (string, error) {
-	defer MountPointsCache.Remove(device)
-	if mountPoint, err := seekMountPoint(device); err == nil {
-		return mountPoint, nil
+	path, err := MountPointsCache.Get(device)
+	if err == nil {
+		go clearCache(device, path)
+		return path, nil
 	}
-	return MountPointsCache.Get(device)
+	return "", fmt.Errorf("Device %s not in cache: %w", device, err)
+}
+
+func clearCache(device, path string) {
+	// Check if the path is a symlink
+	info, err := os.Lstat(path)
+	if err != nil {
+		log.Printf("Failed to stat path %s: %v", path, err)
+		return
+	}
+
+	// Only remove if it's a symlink
+	if info.Mode()&os.ModeSymlink == 0 {
+		log.Printf("Path %s is not a symlink, skipping cleanup", path)
+		return
+	}
+	if err := os.Remove(path); err != nil {
+		log.Printf("Failed to remove symlink %s: %v", path, err)
+		return
+	}
+	MountPointsCache.Remove(device)
+	log.Printf("Successfully cleared %s cache", path)
+}
+
+func FindRelPath(device string, pathGetter func(string) (string, error)) (string, error) {
+	mountPoint, err := pathGetter(device)
+	if err != nil {
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+	}
+	relPath, err := filepath.Rel(mountPoint, config.MPDLibraryFolder)
+	if err != nil {
+		return "", fmt.Errorf("Found mountpoint %s for device %s not in MPDLibraryFolder: %w", mountPoint, device, err)
+	}
+	return relPath, nil
 
 }
 
-func FindMountPointAndAddtoCache(device string) (string, error) {
-	timeout := 3 * time.Second
-	ticker := time.NewTicker(300 * time.Millisecond)
+func FindDevicePathAndCache(device string) (string, error) {
+	mountPoint, err := findMountPointWithRetry(device, RetryTimeout, RetryInterval)
+	if err != nil {
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+	}
+	validatedPath := validateAndPreparePath(mountPoint)
+	MountPointsCache.Add(device, validatedPath)
+	return validatedPath, nil
+}
+
+func findMountPointWithRetry(device string, timeout, interval time.Duration) (string, error) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	timeoutChan := time.After(timeout)
 	for {
@@ -44,6 +94,7 @@ func FindMountPointAndAddtoCache(device string) (string, error) {
 			return "", fmt.Errorf("Device %s not found within timeout", device)
 		}
 	}
+
 }
 
 func newMountPointCache() *MountPointCache {
@@ -58,7 +109,7 @@ func newMountPointCache() *MountPointCache {
 func (m *MountPointCache) Add(device, mountPoint string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.mountPoints[device] = mountPoint
+	m.mountPoints[device] = validateAndPreparePath(mountPoint)
 }
 
 // Remove a device's mount point association
@@ -145,4 +196,32 @@ func populateMountPointCache(m *MountPointCache) {
 	}); err != nil {
 		log.Printf("Failed to populate mount point cache: %v", err)
 	}
+}
+
+func validateAndPreparePath(source string) string {
+	if strings.HasPrefix(source, config.MPDLibraryFolder) {
+		return source // Already valid
+	}
+
+	target := filepath.Join(config.MPDLibraryFolder, filepath.Base(source))
+	if err := createSymlink(source, target); err != nil {
+		log.Printf("Failed to create symlink for %s: %v", source, err)
+		return source // Fallback to the original path
+	}
+
+	return target
+}
+
+// Helper function to create a symbolic link
+func createSymlink(source, target string) error {
+	// Ensure the target directory exists
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("Error creating target directory: %w", err)
+	}
+
+	// Create the symbolic link
+	if err := os.Symlink(source, target); err != nil {
+		return fmt.Errorf("Error creating symlink from %s to %s: %w", source, target)
+	}
+	return nil
 }

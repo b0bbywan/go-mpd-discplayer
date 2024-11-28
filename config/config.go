@@ -26,6 +26,7 @@ var (
 	MPDConnection	MPDConn
 	TargetDevice	string
 	DiscSpeed		int
+	SoundsLocation	string
 )
 
 func init() {
@@ -34,6 +35,7 @@ func init() {
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("TargetDevice", "/dev/sr0")
 	viper.SetDefault("DiscSpeed", 12)
+	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")  // name of config file (without extension)
@@ -58,6 +60,7 @@ func init() {
 
 	TargetDevice = viper.GetString("TargetDevice")
 	DiscSpeed = viper.GetInt("DiscSpeed")
+	SoundsLocation = viper.GetString("SoundsLocation")
 	// Populate the MPDConnection struct
 	MPDConnection = MPDConn{
 		Type:    viper.GetString("MPDConnection.Type"),

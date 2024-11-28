@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
@@ -20,10 +22,47 @@ const (
 
 type MountPointCache struct {
 	mountPoints map[string]string
+	fuseMounts  map[string]*fuse.Server
 	mu          sync.RWMutex
 }
 
+type Finder interface {
+	Find(source string) (string, error)
+}
+
 var MountPointsCache = newMountPointCache()
+
+func newMountPointCache() *MountPointCache {
+	m := &MountPointCache{
+		mountPoints: make(map[string]string),
+	}
+	populateMountPointCache(m)
+	return m
+}
+
+// Add a device-to-mount-point association
+func (m *MountPointCache) Add(device, mountPoint string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.mountPoints[device] = mountPoint
+}
+
+// Remove a device's mount point association
+func (m *MountPointCache) Remove(device string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.mountPoints, device)
+}
+
+// Retrieve a device's mount point
+func (m *MountPointCache) Get(device string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if mountPoint, exists := m.mountPoints[device]; exists {
+		return mountPoint, nil
+	}
+	return "", fmt.Errorf("%s mount point does not exist in cache", device)
+}
 
 func SeekMountPointAndClearCache(device string) (string, error) {
 	path, err := MountPointsCache.Get(device)
@@ -35,24 +74,7 @@ func SeekMountPointAndClearCache(device string) (string, error) {
 }
 
 func clearCache(device, path string) {
-	// Check if the path is a symlink
-	info, err := os.Lstat(path)
-	if err != nil {
-		log.Printf("Failed to stat path %s: %v", path, err)
-		return
-	}
-
-	// Only remove if it's a symlink
-	if info.Mode()&os.ModeSymlink == 0 {
-		log.Printf("Path %s is not a symlink, skipping cleanup", path)
-		return
-	}
-	if err := os.Remove(path); err != nil {
-		log.Printf("Failed to remove symlink %s: %v", path, err)
-		return
-	}
 	MountPointsCache.Remove(device)
-	log.Printf("Successfully cleared %s cache", path)
 }
 
 func FindRelPath(device string, pathGetter func(string) (string, error)) (string, error) {
@@ -68,12 +90,12 @@ func FindRelPath(device string, pathGetter func(string) (string, error)) (string
 
 }
 
-func FindDevicePathAndCache(device string) (string, error) {
+func FindDevicePathAndCache(device string, validator func(string) string) (string, error) {
 	mountPoint, err := findMountPointWithRetry(device, RetryTimeout, RetryInterval)
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
-	validatedPath := validateAndPreparePath(mountPoint)
+	validatedPath := validator(mountPoint)
 	MountPointsCache.Add(device, validatedPath)
 	return validatedPath, nil
 }
@@ -95,38 +117,6 @@ func findMountPointWithRetry(device string, timeout, interval time.Duration) (st
 		}
 	}
 
-}
-
-func newMountPointCache() *MountPointCache {
-	m := &MountPointCache{
-		mountPoints: make(map[string]string),
-	}
-	populateMountPointCache(m)
-	return m
-}
-
-// Add a device-to-mount-point association
-func (m *MountPointCache) Add(device, mountPoint string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.mountPoints[device] = validateAndPreparePath(mountPoint)
-}
-
-// Remove a device's mount point association
-func (m *MountPointCache) Remove(device string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.mountPoints, device)
-}
-
-// Retrieve a device's mount point
-func (m *MountPointCache) Get(device string) (string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if mountPoint, exists := m.mountPoints[device]; exists {
-		return mountPoint, nil
-	}
-	return "", fmt.Errorf("%s mount point does not exist in cache", device)
 }
 
 func isRemovablePath(devnode, mountPoint string) bool {
@@ -198,30 +188,16 @@ func populateMountPointCache(m *MountPointCache) {
 	}
 }
 
-func validateAndPreparePath(source string) string {
+func validateAndPreparePath(source string, callback func(string, string) error) string {
 	if strings.HasPrefix(source, config.MPDLibraryFolder) {
 		return source // Already valid
 	}
 
 	target := filepath.Join(config.MPDLibraryFolder, filepath.Base(source))
-	if err := createSymlink(source, target); err != nil {
+	if err := callback(source, target); err != nil {
 		log.Printf("Failed to create symlink for %s: %v", source, err)
 		return source // Fallback to the original path
 	}
 
 	return target
-}
-
-// Helper function to create a symbolic link
-func createSymlink(source, target string) error {
-	// Ensure the target directory exists
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return fmt.Errorf("Error creating target directory: %w", err)
-	}
-
-	// Create the symbolic link
-	if err := os.Symlink(source, target); err != nil {
-		return fmt.Errorf("Error creating symlink from %s to %s: %w", source, target)
-	}
-	return nil
 }

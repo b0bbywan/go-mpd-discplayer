@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/spf13/viper"
+
+	"github.com/b0bbywan/go-disc-cuer/config"
 )
 
 const (
@@ -26,12 +27,15 @@ type MPDConn struct {
 var (
 	MPDConnection    MPDConn
 	MPDLibraryFolder string
+	MPDCueSubfolder  string
+	MPDUSBSubfolder  string
 	TargetDevice     string
 	DiscSpeed        int
 	SoundsLocation   string
 	AudioBackend     string
 	PulseServer      string
 	CuerConfig       *config.Config
+	MountConfig      string
 )
 
 func init() {
@@ -39,10 +43,14 @@ func init() {
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
+	viper.SetDefault("MPDCueSubfolder", ".disc-cuer")
+	viper.SetDefault("MPDUSBSubfolder", ".")
 	viper.SetDefault("DiscSpeed", 12)
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
+	viper.SetDefault("MountConfig", "symlink")
+
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                       // name of config file (without extension)
 	viper.SetConfigType("yaml")                         // config file format
@@ -78,7 +86,12 @@ func init() {
 		log.Fatalf("Error validating MPD Connection: %w", err)
 	}
 	MPDLibraryFolder = viper.GetString("MPDLibraryFolder")
-	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, ".disc-cuer"))
+	MPDUSBSubfolder = viper.GetString("MPDUSBSubfolder")
+	MountConfig = viper.GetString("MountConfig")
+	MPDCueSubfolder = viper.GetString("MPDCueSubfolder")
+	cuerCacheLocation := filepath.Join(MPDLibraryFolder, MPDCueSubfolder)
+	log.Printf("CuerCacheLocation: %s", cuerCacheLocation)
+	CuerConfig, err = config.NewConfig(AppName, AppVersion, cuerCacheLocation)
 	if err != nil {
 		log.Fatalf("Failed to create disc-cuer config: %v", err)
 	}

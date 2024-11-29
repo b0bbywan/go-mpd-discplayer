@@ -32,6 +32,7 @@ var (
 	AudioBackend     string
 	PulseServer      string
 	CuerConfig       *config.Config
+	MountConfig      string
 )
 
 func init() {
@@ -43,6 +44,8 @@ func init() {
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
+	viper.SetDefault("MountConfig", "fuse")
+
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                       // name of config file (without extension)
 	viper.SetConfigType("yaml")                         // config file format
@@ -78,6 +81,7 @@ func init() {
 		log.Fatalf("Error validating MPD Connection: %w", err)
 	}
 	MPDLibraryFolder = viper.GetString("MPDLibraryFolder")
+	MountConfig = viper.GetString("MountConfig")
 	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, ".disc-cuer"))
 	if err != nil {
 		log.Fatalf("Failed to create disc-cuer config: %v", err)

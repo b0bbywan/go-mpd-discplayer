@@ -1,4 +1,4 @@
-package hwcontrol
+package mounts
 
 import (
 	"fmt"
@@ -11,22 +11,22 @@ import (
 
 type FuseFinder struct {}
 
-func (s *FuseFinder) Find(device string) (string, error) {
-	return FindDevicePathAndCache(device, fuseValidator)
-}
-
-func fuseValidator(source string) string {
+func (f *FuseFinder) validate(source string) string {
 	return validateAndPreparePath(source, createFuseMountAndCache)
 }
 
-func (m *MountPointCache) AddServer(device string, server *fuse.Server) {
+func (f *FuseFinder) clear(source, target string) {
+	clearFuseMount(source, target)
+}
+
+func (m *MountManager) AddServer(device string, server *fuse.Server) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.fuseMounts[device] = server
 }
 
 // Retrieve a device's FUSE server
-func (m *MountPointCache) GetServer(device string) (*fuse.Server, error) {
+func (m *MountManager) GetServer(device string) (*fuse.Server, error) {
     m.mu.RLock()
     defer m.mu.RUnlock()
     server, exists := m.fuseMounts[device]
@@ -37,11 +37,11 @@ func (m *MountPointCache) GetServer(device string) (*fuse.Server, error) {
 }
 
 func createFuseMountAndCache(source, target string) error {
-	server, err := createFuseMount(source, target)
+	_, err := createFuseMount(source, target)
 	if err != nil {
 		return fmt.Errorf("failed to create fuse mount for %s:%s: %w", source, target, err)
 	}
-	MountPointsCache.AddServer(source, server)
+//	MountPointsCache.AddServer(source, server)
 	return nil
 }
 
@@ -81,7 +81,7 @@ func createFuseMount(source, target string) (*fuse.Server, error) {
 }
 
 func clearFuseMount(device, target string) {
-	server, err := MountPointsCache.GetServer(device)
+/*	server, err := MountPointsCache.GetServer(device)
 	if err != nil {
 		log.Printf("Failed to find %s fuse server in cache: %v", device, err)
 		return
@@ -89,5 +89,5 @@ func clearFuseMount(device, target string) {
 	if err = server.Unmount(); err != nil {
 		log.Printf("Failed to unmount %s fuse server in cache: %v", device, err)
 		return
-	}
+	}*/
 }

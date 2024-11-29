@@ -33,14 +33,13 @@ func FindMountPointAndAddtoCache(device string) (string, error) {
 	defer ticker.Stop()
 	timeoutChan := time.After(timeout)
 	for {
+		if mountPoint, err := seekMountPoint(device); err == nil {
+			MountPointsCache.Add(device, mountPoint)
+			return mountPoint, nil
+		}
 		select {
 		case <-ticker.C:
 			log.Printf("Polling for %s mount point...", device)
-			mountPoint, err := seekMountPoint(device)
-			if err == nil {
-				defer MountPointsCache.Add(device, mountPoint)
-				return mountPoint, nil
-			}
 		case <-timeoutChan:
 			return "", fmt.Errorf("Device %s not found within timeout", device)
 		}

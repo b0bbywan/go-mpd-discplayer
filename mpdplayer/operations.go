@@ -179,12 +179,12 @@ func UpdateDBAndWait(client *mpd.Client, label string) error {
 	defer ticker.Stop()
 	timeoutChan := time.After(timeout)
 	for {
-		select {
-		case <-ticker.C:
 		if !DbUpdating(client) {
 			log.Println("Database update finished.")
 			return nil
 		}
+		select {
+		case <-ticker.C:
 		case <-timeoutChan:
 			return fmt.Errorf("Database did not finish update within timeout")
 		}

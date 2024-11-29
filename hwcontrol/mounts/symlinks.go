@@ -1,4 +1,4 @@
-package hwcontrol
+package mounts
 
 import (
 	"fmt"
@@ -8,13 +8,17 @@ import (
 )
 
 type SymlinkFinder struct {}
-
-func (s *SymlinkFinder) Find(source string) (string, error) {
+/*
+func (s *SymlinkFinder) Mount(source string) (string, error) {
 	return FindDevicePathAndCache(source, symlinkValidator)
 }
-
-func symlinkValidator(source string) string {
+*/
+func (s *SymlinkFinder) validate(source string) string {
 	return validateAndPreparePath(source, createSymlink)
+}
+
+func (s *SymlinkFinder) clear(source, target string) {
+	return clearSymlinkCache(source, target)
 }
 
 // Helper function to create a symbolic link

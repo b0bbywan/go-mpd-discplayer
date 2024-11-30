@@ -20,6 +20,7 @@ func main() {
 	flag.Usage = usage
 	playFlag := flag.Bool(cmd.ActionPlay, false, "Start playback immediately")
 	stopFlag := flag.Bool(cmd.ActionStop, false, "Stop playback immediately")
+	deviceFlag := flag.String("device", "/dev/sr0", "Disc Device")
 	flag.Parse()
 
 	if *playFlag && *stopFlag {
@@ -41,13 +42,13 @@ func main() {
 
 	// Handle flags
 	if *playFlag {
-		if err := cmd.ExecuteAction(mpdClient, cmd.ActionPlay); err != nil {
+		if err := cmd.ExecuteAction(mpdClient, *deviceFlag, cmd.ActionPlay); err != nil {
 			log.Fatalf("Failed to start playback: %v", err)
 		}
 		return
 	}
 	if *stopFlag {
-		if err := cmd.ExecuteAction(mpdClient, cmd.ActionStop); err != nil {
+		if err := cmd.ExecuteAction(mpdClient, *deviceFlag, cmd.ActionStop); err != nil {
 			log.Fatalf("Failed to stop playback: %v", err)
 		}
 		return
@@ -60,13 +61,14 @@ func main() {
 }
 
 func usage() {
-    fmt.Println("Usage:")
-    fmt.Println("  mpd-discplayer [options]")
-    fmt.Println("")
-    fmt.Println("Options:")
-    fmt.Println("  --play   Start playback immediately")
-    fmt.Println("  --stop   Stop playback immediately")
-    fmt.Println("  -h, --help   Display this help message")
+	fmt.Println("Usage:")
+	fmt.Println("  mpd-discplayer [options]")
+	fmt.Println("")
+	fmt.Println("Options:")
+	fmt.Println("  --play   Start playback immediately")
+	fmt.Println("  --stop   Stop playback immediately")
+	fmt.Println("  --device <device>   Set device to play from (only with --play)")
+	fmt.Println("  -h, --help   Display this help message")
 }
 
 func signalMonitor(wg *sync.WaitGroup, cancel context.CancelFunc) {

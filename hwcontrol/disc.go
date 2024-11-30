@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"github.com/jochenvg/go-udev"
-	"github.com/b0bbywan/go-disc-cuer/utils"
 	"golang.org/x/sys/unix"
+
+	"github.com/b0bbywan/go-disc-cuer/utils"
 )
 
 const (
-	CDROM_SET_SPEED = 0x5322 // ioctl command for setting speed
+	CDROM_SET_SPEED      = 0x5322 // ioctl command for setting speed
 	CDROM_PROC_FILE_INFO = "/proc/sys/dev/cdrom/info"
 )
 
@@ -64,8 +66,8 @@ func onAddDiscChecker(device *udev.Device) bool {
 // discPreChecker ensures the device is valid and matches the target device.
 func discPreChecker(device *udev.Device) bool {
 	if device == nil ||
-	device.PropertyValue("ID_CDROM") != "1" ||
-	device.PropertyValue("ID_FS_TYPE") != "" {
+		device.PropertyValue("ID_CDROM") != "1" ||
+		device.PropertyValue("ID_FS_TYPE") != "" {
 		return false
 	}
 	return true

@@ -1,51 +1,71 @@
 package mounts
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
+
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-type FuseFinder struct {}
-
-func (f *FuseFinder) validate(source string) string {
-	return validateAndPreparePath(source, createFuseMountAndCache)
+type FuseFinder struct {
+	ctx        context.Context
+	fuseMounts map[string]*fuse.Server
+	mu         sync.RWMutex // Protects access to mounts
 }
 
-func (f *FuseFinder) clear(source, target string) {
-	clearFuseMount(source, target)
+func newFuseFinder(ctx context.Context) *FuseFinder {
+	return &FuseFinder{
+		ctx:        ctx,
+		fuseMounts: make(map[string]*fuse.Server),
+	}
 }
 
-func (m *MountManager) AddServer(device string, server *fuse.Server) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.fuseMounts[device] = server
+func (f *FuseFinder) validate(source string) (string, error) {
+	return validateAndPreparePath(source, f.createFuseMountAndCache)
+}
+
+func (f *FuseFinder) clear(source, target string) error {
+	return f.clearFuseMount(source, target)
+}
+
+func (f *FuseFinder) AddServer(device string, server *fuse.Server) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fuseMounts[device] = server
+}
+
+func (f *FuseFinder) DeleteServer(device string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.fuseMounts, device)
 }
 
 // Retrieve a device's FUSE server
-func (m *MountManager) GetServer(device string) (*fuse.Server, error) {
-    m.mu.RLock()
-    defer m.mu.RUnlock()
-    server, exists := m.fuseMounts[device]
-    if !exists {
-        return nil, fmt.Errorf("No FUSE server for device %s", device)
-    }
-    return server, nil
+func (f *FuseFinder) GetServer(device string) (*fuse.Server, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	server, exists := f.fuseMounts[device]
+	if !exists {
+		return nil, fmt.Errorf("No FUSE server for device %s", device)
+	}
+	return server, nil
 }
 
-func createFuseMountAndCache(source, target string) error {
-	_, err := createFuseMount(source, target)
+func (f *FuseFinder) createFuseMountAndCache(source, target string) error {
+	server, err := f.createFuseMount(source, target)
 	if err != nil {
 		return fmt.Errorf("failed to create fuse mount for %s:%s: %w", source, target, err)
 	}
-//	MountPointsCache.AddServer(source, server)
+	f.AddServer(source, server)
 	return nil
 }
 
-func createFuseMount(source, target string) (*fuse.Server, error) {
+func (f *FuseFinder) createFuseMount(source, target string) (*fuse.Server, error) {
 	// Ensure the target directory exists
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return nil, fmt.Errorf("Error creating target directory: %w", err)
@@ -77,16 +97,17 @@ func createFuseMount(source, target string) (*fuse.Server, error) {
 	return server, nil
 }
 
-func clearFuseMount(device, target string) {
-/*	server, err := MountPointsCache.GetServer(device)
+func (f *FuseFinder) clearFuseMount(device, target string) error {
+	server, err := f.GetServer(device)
 	if err != nil {
-		log.Printf("Failed to find %s fuse server in cache: %v", device, err)
-		return
+		return fmt.Errorf("Failed to find %s fuse server in cache: %w", device, err)
+
 	}
 	if err = server.Unmount(); err != nil {
-		log.Printf("Failed to unmount %s fuse server in cache: %v", device, err)
-		return
-	}*/
+		return fmt.Errorf("Failed to unmount %s fuse server in cache: %w", device, err)
+	}
+	f.DeleteServer(device)
+	return nil
 }
 
 func WaitContext(server *fuse.Server) {

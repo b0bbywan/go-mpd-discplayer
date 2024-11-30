@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/spf13/viper"
+
+	"github.com/b0bbywan/go-disc-cuer/config"
 )
 
 const (

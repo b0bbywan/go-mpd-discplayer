@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -11,11 +12,14 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
-func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient) []*hwcontrol.EventHandler {
+func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) []*hwcontrol.EventHandler {
 	handlers := hwcontrol.NewBasicUSBHandlers()
-	mounter := mounts.NewMountManager()
+	mounter, err := mounts.NewMountManager(ctx)
+	if err != nil {
+		return nil
+	}
 	startUSBPlayback := func(device *udev.Device) error {
-		relPath, err := mounter.FindRelPath(device.Devnode())
+		relPath, err := mounter.Mount(device.Devnode())
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[0].Name(), device.Devnode(), err)
 		}
@@ -26,14 +30,14 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 	}
 
 	stopUSBPlayback := func(device *udev.Device) error {
-/*		relPath, err := hwcontrol.FindRelPath(device.Devnode(), hwcontrol.SeekMountPointAndClearCache)
+		relPath, err := mounter.Unmount(device.Devnode())
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[1].Name(), device.Devnode(), err)
 		}
 		if err := mpdClient.StopPlayback(relPath); err != nil {
 			return fmt.Errorf("[%s] Error stopping %s USB playback: %w", handlers[1].Name(), device.Devnode(), err)
 		}
-*/		return nil
+		return nil
 	}
 
 	handlers[0].SetProcessor(

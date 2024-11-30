@@ -2,15 +2,15 @@ package mounts
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
@@ -20,51 +20,45 @@ const (
 	RetryInterval = 300 * time.Millisecond
 )
 
+var USBNameRegex = regexp.MustCompile(`^sd.*$`)
+
 type MountManager struct {
+	ctx         context.Context
 	mountPoints map[string]string
-	fuseMounts  map[string]*fuse.Server
 	mu          sync.RWMutex
 	mounter     Mounter
 }
 
 type Mounter interface {
 	validate(source string) (string, error)
-	clear(source string) (error)
+	clear(source, target string) error
 }
 
-/*
 func (m *MountManager) Mount(device string) (string, error) {
-	return FindDevicePathAndCache(device, m.mounter.validate)
-}
-*/
-func (m *MountManager) Unmount(device, target string) {
-	return 
+	return m.FindRelPath(device, m.FindDevicePathAndCache)
 }
 
-func NewMountManager() (*MountManager, error) {
-    var mounter Mounter
-
-    switch config.MountConfig {
-    case "fuse":
-        mounter = &FuseFinder{}
-    case "symlink":
-        mounter = &SymlinkFinder{}
-    default:
-        return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
-    }
-
-    return &MountManager{
-        mountPoints: make(map[string]string),
-        mounter:     mounter,
-        fuseMounts:  initializeFuseMap(MountConfig),
-    }, nil
+func (m *MountManager) Unmount(device string) (string, error) {
+	return m.FindRelPath(device, m.SeekMountPointAndClearCache)
 }
 
-func initializeFuseMap(mountType string) map[string]*fuse.Server {
-    if mountType == "fuse" {
-        return make(map[string]*fuse.Server)
-    }
-    return nil // Avoid allocating unnecessary resources
+func NewMountManager(ctx context.Context) (*MountManager, error) {
+	var mounter Mounter
+
+	switch config.MountConfig {
+	case "fuse":
+		mounter = newFuseFinder(ctx)
+	case "symlink":
+		mounter = newSymlinkFinder(ctx)
+	default:
+		return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
+	}
+
+	return &MountManager{
+		ctx:         ctx,
+		mountPoints: make(map[string]string),
+		mounter:     mounter,
+	}, nil
 }
 
 // Add a device-to-mount-point association
@@ -91,22 +85,24 @@ func (m *MountManager) GetCache(device string) (string, error) {
 	return "", fmt.Errorf("%s mount point does not exist in cache", device)
 }
 
-func SeekMountPointAndClearCache(device string) (string, error) {
-	path, err := MountPointsCache.Get(device)
+func (m *MountManager) SeekMountPointAndClearCache(device string) (string, error) {
+	path, err := m.GetCache(device)
 	if err == nil {
-		go clearCache(device, path)
+		go m.clearCache(device, path)
 		return path, nil
 	}
 	return "", fmt.Errorf("Device %s not in cache: %w", device, err)
 }
 
-func clearCache(device, path string, cleaner func(string, string)) {
-	cleaner(device, path)
-	MountPointsCache.Remove(device)
+func (m *MountManager) clearCache(device, path string) {
+	if err := m.mounter.clear(device, path); err != nil {
+		log.Printf("failed to clear submounter: %w", err)
+	}
+	m.RemoveCache(device)
 }
 
-func (m *MountManager) FindRelPath(device string) (string, error) {
-	mountPoint, err := m.FindDevicePathAndCache(device)
+func (m *MountManager) FindRelPath(device string, callback func(string) (string, error)) (string, error) {
+	mountPoint, err := callback(device)
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
@@ -115,26 +111,28 @@ func (m *MountManager) FindRelPath(device string) (string, error) {
 		return "", fmt.Errorf("Found mountpoint %s for device %s not in MPDLibraryFolder: %w", mountPoint, device, err)
 	}
 	return relPath, nil
-
 }
 
 func (m *MountManager) FindDevicePathAndCache(device string) (string, error) {
-	mountPoint, err := findMountPointWithRetry(device, RetryTimeout, RetryInterval)
+	mountPoint, err := m.findMountPointWithRetry(device, RetryTimeout, RetryInterval)
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
-	validatedPath := m.mounter.validate(mountPoint)
-	MountPointsCache.Add(device, validatedPath)
+	m.AddCache(device, mountPoint)
+	validatedPath, err := m.mounter.validate(mountPoint)
+	if err != nil {
+		return "", fmt.Errorf("mounter validation failed: %w", err)
+	}
 	return validatedPath, nil
 }
 
-func findMountPointWithRetry(device string, timeout, interval time.Duration) (string, error) {
+func (m *MountManager) findMountPointWithRetry(device string, timeout, interval time.Duration) (string, error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	timeoutChan := time.After(timeout)
 	for {
 		if mountPoint, err := seekMountPoint(device); err == nil {
-			MountPointsCache.Add(device, mountPoint)
+			m.AddCache(device, mountPoint)
 			return mountPoint, nil
 		}
 		select {
@@ -144,14 +142,13 @@ func findMountPointWithRetry(device string, timeout, interval time.Duration) (st
 			return "", fmt.Errorf("Device %s not found within timeout", device)
 		}
 	}
-
 }
 
 func isRemovablePath(devnode, mountPoint string) bool {
 	if !strings.HasPrefix(devnode, "/dev") {
 		return false
 	}
-	if !usbNameRegex.MatchString(filepath.Base(devnode)) {
+	if !USBNameRegex.MatchString(filepath.Base(devnode)) {
 		return false
 	}
 	if mountPoint == "/" ||
@@ -172,7 +169,6 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 		return fmt.Errorf("failed to open %s: %v", mountFile, err)
 	}
 	defer file.Close()
-
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -182,31 +178,29 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 		}
 		callback(fields[0], fields[1]) // Call the provided callback with device and mount point
 	}
-
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("error reading %s: %v", mountFile, err)
 	}
-
 	return nil
 }
 
 func seekMountPoint(device string) (string, error) {
 	var mountPoint string
-	if err := readMountsFile(func(d, mp string) {
+	err := readMountsFile(func(d, mp string) {
 		if d == device {
 			mountPoint = mp
 		}
-	}); err != nil {
+	})
+	if err != nil {
 		return "", err
 	}
-
 	if mountPoint == "" {
 		return "", fmt.Errorf("device %s not found", device)
 	}
 	return mountPoint, nil
 }
 
-func populateMountPointCache(m *MountPointCache) {
+func populateMountPointCache(m *MountManager) {
 	if err := readMountsFile(func(device, mountPoint string) {
 		if isRemovablePath(device, mountPoint) {
 			m.AddCache(device, mountPoint)
@@ -216,16 +210,14 @@ func populateMountPointCache(m *MountPointCache) {
 	}
 }
 
-func validateAndPreparePath(source string, callback func(string, string) error) string {
+func validateAndPreparePath(source string, callback func(string, string) error) (string, error) {
 	if strings.HasPrefix(source, config.MPDLibraryFolder) {
-		return source // Already valid
+		return source, nil // Already valid
 	}
 
 	target := filepath.Join(config.MPDLibraryFolder, filepath.Base(source))
 	if err := callback(source, target); err != nil {
-		log.Printf("Failed to create symlink for %s: %v", source, err)
-		return source // Fallback to the original path
+		return "", fmt.Errorf("Failed to create symlink for %s: %v", source, err)
 	}
-
-	return target
+	return target, nil
 }

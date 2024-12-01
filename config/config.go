@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	AppName		= "mpd-discplayer"
-	AppVersion	= "0.4"
+	AppName    = "mpd-discplayer"
+	AppVersion = "0.4"
 )
 
 type MPDConn struct {

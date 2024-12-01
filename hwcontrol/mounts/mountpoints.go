@@ -179,7 +179,7 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 		callback(fields[0], fields[1]) // Call the provided callback with device and mount point
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading %s: %v", mountFile, err)
+		return fmt.Errorf("error reading %s: %w", mountFile, err)
 	}
 	return nil
 }
@@ -217,7 +217,7 @@ func validateAndPreparePath(source string, callback func(string, string) error) 
 
 	target := filepath.Join(config.MPDLibraryFolder, filepath.Base(source))
 	if err := callback(source, target); err != nil {
-		return "", fmt.Errorf("Failed to create symlink for %s: %v", source, err)
+		return "", fmt.Errorf("Failed to create symlink for %s: %w", source, err)
 	}
 	return target, nil
 }

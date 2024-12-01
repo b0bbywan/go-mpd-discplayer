@@ -60,7 +60,7 @@ func (s *SymlinkFinder) createSymlink(source, target string) error {
 
 	// Create the symbolic link
 	if err := os.Symlink(source, target); err != nil {
-		return fmt.Errorf("Error creating symlink from %s to %s: %w", source, target)
+		return fmt.Errorf("Error creating symlink from %s to %s: %w", source, target, err)
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (s *SymlinkFinder) clearSymlinkCache(device, path string) error {
 		return fmt.Errorf("Path %s is not a symlink, skipping cleanup", path)
 	}
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("Failed to remove symlink %s: %v", path, err)
+		return fmt.Errorf("Failed to remove symlink %s: %w", path, err)
 	}
 	log.Printf("Successfully cleared %s cache", path)
 	return nil

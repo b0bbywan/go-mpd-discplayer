@@ -41,7 +41,7 @@ func init() {
 	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
 	viper.SetDefault("DiscSpeed", 12)
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
-	viper.SetDefault("MountConfig", "fuse")
+	viper.SetDefault("MountConfig", "symlink")
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                              // name of config file (without extension)

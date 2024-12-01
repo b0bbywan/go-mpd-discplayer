@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/jochenvg/go-udev"
@@ -16,6 +17,7 @@ func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplaye
 	handlers := hwcontrol.NewBasicUSBHandlers()
 	mounter, err := mounts.NewMountManager(ctx)
 	if err != nil {
+		log.Printf("Failed to create mounter, USB Playback disabled")
 		return nil
 	}
 	startUSBPlayback := func(device *udev.Device) error {

@@ -32,7 +32,7 @@ func (h *EventHandler) DeviceFilter(device *udev.Device) bool {
 }
 
 func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error, notifier *notifications.Notifier) {
-	h.processFunc = func(device *udev.Device) error {
+	processFunc := func(device *udev.Device) error {
 		log.Println(actionLog)
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
@@ -51,6 +51,8 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 		}()
 		return nil
 	}
+
+	h.processFunc = processFunc
 }
 
 func (h *EventHandler) Process(ctx context.Context, device *udev.Device) error {

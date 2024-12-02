@@ -32,18 +32,18 @@ func (h *EventHandler) DeviceFilter(device *udev.Device) bool {
 }
 
 func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error, notifier *notifications.Notifier) {
-	h.processFunc = func(device *udev.Device) error {
+	processFunc := func(device *udev.Device) error {
 		log.Println(actionLog)
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
 			if notifier != nil {
-				notifier.PlaySuccess()
+				go notifier.PlaySuccess()
 			}
 
 			defer wg.Done()
 			if err := processor(device); err != nil {
 				if notifier != nil {
-					notifier.PlayError()
+					go notifier.PlayError()
 				}
 				log.Printf("[%s] Failed to process action: %v", h.Name(), err)
 				return
@@ -51,6 +51,8 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 		}()
 		return nil
 	}
+
+	h.processFunc = processFunc
 }
 
 func (h *EventHandler) Process(ctx context.Context, device *udev.Device) error {

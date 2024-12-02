@@ -1,7 +1,7 @@
 package notifications
 
 import (
-	"log"
+	"fmt"
 	"path/filepath"
 
 	"github.com/b0bbywan/go-mpd-discplayer/config"
@@ -14,50 +14,44 @@ var soundPaths = map[string]string{
 }
 
 type Notifier struct {
-	notifier *RootNotifier
-	success  string
-	error    string
+	sc       *SoundCache
+	success string
+	error   string
 }
 
-func newNotifier(notifier *RootNotifier, sucessSound, errorSound string) *Notifier {
+func newNotifier(sc *SoundCache, sucessSound, errorSound string) *Notifier {
 	return &Notifier{
-		notifier: notifier,
+		sc:       sc,
 		success:  sucessSound,
 		error:    errorSound,
 	}
 }
 
 func (n *Notifier) PlaySuccess() {
-	n.notifier.Play(n.success)
+	n.play(n.success)
 }
 
 func (n *Notifier) PlayError() {
-	n.notifier.Play(n.error)
+	n.play(n.error)
 }
 
-func NewAddNotification(notifier *RootNotifier) *Notifier {
-	return newNotifier(notifier, "add", "error")
-}
-
-func NewRemoveNotification(notifier *RootNotifier) *Notifier {
-	return newNotifier(notifier, "remove", "error")
+func (n *Notifier) play(name string) error {
+	if err := n.sc.Play(name); err != nil {
+		return fmt.Errorf("Failed to play sound (%s): %w", name, err)
+	}
+	return nil
 }
 
 type RootNotifier struct {
-	sc *SoundCache
+    AddNotifier   *Notifier
+    RemoveNotifier *Notifier
 }
 
 // NewRootNotifier creates a new instance of RootNotifier.
 func NewRootNotifier() *RootNotifier {
+	sc := NewSoundCache(soundPaths)
 	return &RootNotifier{
-		sc: NewSoundCache(soundPaths),
+		AddNotifier:    newNotifier(sc, "add", "error"),
+		RemoveNotifier: newNotifier(sc, "remove", "error"),
 	}
-}
-
-func (n *RootNotifier) Play(name string) {
-	go func() {
-		if err := n.sc.Play(name); err != nil {
-			log.Printf("Failed to play sound (%s): %v", name, err)
-		}
-	}()
 }

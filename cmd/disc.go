@@ -39,7 +39,7 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 		wg,
 		fmt.Sprintf("[%s] Starting Disc Playback", handlers[0].Name()),
 		startDiscPlayback,
-		notifications.NewAddNotification(notifier),
+		notifier.AddNotifier,
 	)
 
 	// Define action for the "remove" event (handler[1])
@@ -47,7 +47,7 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 		wg,
 		fmt.Sprintf("[%s] Stopping Disc Playback", handlers[1].Name()),
 		stopDiscPlayback,
-		notifications.NewRemoveNotification(notifier),
+		notifier.RemoveNotifier,
 	)
 
 	return handlers

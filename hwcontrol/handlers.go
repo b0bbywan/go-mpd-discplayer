@@ -37,13 +37,13 @@ func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, proces
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
 			if notifier != nil {
-				notifier.PlaySuccess()
+				go notifier.PlaySuccess()
 			}
 
 			defer wg.Done()
 			if err := processor(device); err != nil {
 				if notifier != nil {
-					notifier.PlayError()
+					go notifier.PlayError()
 				}
 				log.Printf("[%s] Failed to process action: %v", h.Name(), err)
 				return

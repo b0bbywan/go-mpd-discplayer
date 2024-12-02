@@ -40,6 +40,7 @@ func (sc *SoundCache) loadSound(name, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open sound file %s: %w", path, err)
 	}
+	defer f.Close()
 	streamer, format, err := wav.Decode(f)
 	if err != nil {
 		return fmt.Errorf("failed to decode sound file %s: %w", path, err)
@@ -52,12 +53,12 @@ func (sc *SoundCache) loadSound(name, path string) error {
 
 func (sc *SoundCache) Play(name string) error {
 	sc.Lock()
+	defer sc.Unlock()
 	sound, exists := sc.sounds[name]
-	sc.Unlock()
+
 	if !exists {
 		return fmt.Errorf("sound %s not found", name)
 	}
-	sc.Lock()
 	log.Printf("Playing sound %s", name)
 	done := make(chan bool)
 	speaker.Play(beep.Seq(sound.Streamer, beep.Callback(func() { done <- true })))
@@ -65,7 +66,6 @@ func (sc *SoundCache) Play(name string) error {
 	if err := sound.Streamer.Seek(0); err != nil {
 		return fmt.Errorf("Failed to reset %s sound: %w", name, err)
 	}
-	sc.Unlock()
 	log.Printf("Played sound %s", name)
 	return nil
 }

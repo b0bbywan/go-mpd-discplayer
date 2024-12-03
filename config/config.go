@@ -27,6 +27,8 @@ type MPDConn struct {
 var (
 	MPDConnection    MPDConn
 	MPDLibraryFolder string
+	MPDCueSubfolder  string
+	MPDUSBSubfolder  string
 	TargetDevice     string
 	DiscSpeed        int
 	SoundsLocation   string
@@ -41,6 +43,8 @@ func init() {
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
+	viper.SetDefault("MPDCueSubfolder", ".disc-cuer")
+	viper.SetDefault("MPDUSBSubfolder", ".")
 	viper.SetDefault("DiscSpeed", 12)
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 	viper.SetDefault("AudioBackend", "pulse")
@@ -82,8 +86,10 @@ func init() {
 		log.Fatalf("Error validating MPD Connection: %w", err)
 	}
 	MPDLibraryFolder = viper.GetString("MPDLibraryFolder")
+	MPDUSBSubfolder = viper.GetString("MPDUSBSubfolder")
 	MountConfig = viper.GetString("MountConfig")
-	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, ".disc-cuer"))
+	MPDCueSubfolder = viper.GetString("MPDCueSubfolder")
+	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, MPDCueSubfolder))
 	if err != nil {
 		log.Fatalf("Failed to create disc-cuer config: %v", err)
 	}

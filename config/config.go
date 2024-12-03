@@ -44,9 +44,9 @@ func init() {
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
 	// Load from configuration file, environment variables, and CLI flags
-	viper.SetConfigName("config")                              // name of config file (without extension)
-	viper.SetConfigType("yaml")                                // config file format
-	viper.AddConfigPath(filepath.Join("/etc", config.AppName)) // Global configuration path
+	viper.SetConfigName("config")                       // name of config file (without extension)
+	viper.SetConfigType("yaml")                         // config file format
+	viper.AddConfigPath(filepath.Join("/etc", AppName)) // Global configuration path
 	if home, err := os.UserHomeDir(); err == nil {
 		viper.AddConfigPath(filepath.Join(home, ".config", AppName)) // User config path
 	}

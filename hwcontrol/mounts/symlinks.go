@@ -47,12 +47,12 @@ func (s *SymlinkFinder) validate(source string) (string, error) {
 	return validateAndPreparePath(source, s.createSymlink)
 }
 
-func (s *SymlinkFinder) clear(source, target string) error {
-	return s.clearSymlinkCache(source, target)
+func (s *SymlinkFinder) clear(source, mountpoint string) (string, error) {
+	return s.clearSymlinkCache(source, mountpoint)
 }
 
 // Helper function to create a symbolic link
-func (s *SymlinkFinder) createSymlink(source, target string) error {
+func (s *SymlinkFinder) createSymlink(source, target string) (string, error) {
 	// Ensure the target directory exists
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return fmt.Errorf("Error creating target directory: %w", err)
@@ -62,10 +62,13 @@ func (s *SymlinkFinder) createSymlink(source, target string) error {
 	if err := os.Symlink(source, target); err != nil {
 		return fmt.Errorf("Error creating symlink from %s to %s: %w", source, target, err)
 	}
+	s.AddCache(source, target)
 	return nil
 }
 
-func (s *SymlinkFinder) clearSymlinkCache(device, path string) error {
+func (s *SymlinkFinder) clearSymlinkCache(device, mountpoint string) error {
+	path, err := s.GetCache(device)
+
 	// Check if the path is a symlink
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -76,9 +79,14 @@ func (s *SymlinkFinder) clearSymlinkCache(device, path string) error {
 	if info.Mode()&os.ModeSymlink == 0 {
 		return fmt.Errorf("Path %s is not a symlink, skipping cleanup", path)
 	}
-	if err := os.Remove(path); err != nil {
+	symlinkTarget, err = os.Readlink(path)
+	if err == nil {
+		return fmt.Errorf("%s symlink not dead: %s still exists", path, symlinkTarget)
+	}
+	if err = os.Remove(path); err != nil {
 		return fmt.Errorf("Failed to remove symlink %s: %w", path, err)
 	}
 	log.Printf("Successfully cleared %s cache", path)
+	s.RemoveCache(device)
 	return nil
 }

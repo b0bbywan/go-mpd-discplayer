@@ -25,11 +25,11 @@ func newFuseFinder(ctx context.Context) *FuseFinder {
 	}
 }
 
-func (f *FuseFinder) validate(source string) (string, error) {
-	return validateAndPreparePath(source, f.createFuseMountAndCache)
+func (f *FuseFinder) validate(device, mountpoint string) (string, error) {
+	return validateAndPreparePath(device, mountpoint, f.createFuseMountAndCache)
 }
 
-func (f *FuseFinder) clear(source, target string) error {
+func (f *FuseFinder) clear(source, target string) (string, error) {
 	return f.clearFuseMount(source, target)
 }
 
@@ -56,13 +56,13 @@ func (f *FuseFinder) GetServer(device string) (*fuse.Server, error) {
 	return server, nil
 }
 
-func (f *FuseFinder) createFuseMountAndCache(source, target string) error {
-	server, err := f.createFuseMount(source, target)
+func (f *FuseFinder) createFuseMountAndCache(device, mountpoint, target string) (string, error) {
+	server, err := f.createFuseMount(mountpoint, target)
 	if err != nil {
-		return fmt.Errorf("failed to create fuse mount for %s:%s: %w", source, target, err)
+		return "", fmt.Errorf("failed to create fuse mount for %s:%s: %w", mountpoint, target, err)
 	}
-	f.AddServer(source, server)
-	return nil
+	f.AddServer(device, server)
+	return target, nil
 }
 
 func (f *FuseFinder) createFuseMount(source, target string) (*fuse.Server, error) {
@@ -97,17 +97,17 @@ func (f *FuseFinder) createFuseMount(source, target string) (*fuse.Server, error
 	return server, nil
 }
 
-func (f *FuseFinder) clearFuseMount(device, target string) error {
+func (f *FuseFinder) clearFuseMount(device, target string) (string, error) {
 	server, err := f.GetServer(device)
 	if err != nil {
-		return fmt.Errorf("Failed to find %s fuse server in cache: %w", device, err)
+		return "", fmt.Errorf("Failed to find %s fuse server in cache: %w", device, err)
 
 	}
 	if err = server.Unmount(); err != nil {
-		return fmt.Errorf("Failed to unmount %s fuse server in cache: %w", device, err)
+		return "", fmt.Errorf("Failed to unmount %s fuse server in cache: %w", device, err)
 	}
 	f.DeleteServer(device)
-	return nil
+	return target, nil
 }
 
 func WaitContext(server *fuse.Server) {

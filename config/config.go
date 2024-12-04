@@ -89,7 +89,9 @@ func init() {
 	MPDUSBSubfolder = viper.GetString("MPDUSBSubfolder")
 	MountConfig = viper.GetString("MountConfig")
 	MPDCueSubfolder = viper.GetString("MPDCueSubfolder")
-	CuerConfig, err = config.NewConfig(AppName, AppVersion, filepath.Join(MPDLibraryFolder, MPDCueSubfolder))
+	cuerCacheLocation := filepath.Join(MPDLibraryFolder, MPDCueSubfolder)
+	log.Printf("CuerCacheLocation: %s", cuerCacheLocation)
+	CuerConfig, err = config.NewConfig(AppName, AppVersion, cuerCacheLocation)
 	if err != nil {
 		log.Fatalf("Failed to create disc-cuer config: %v", err)
 	}

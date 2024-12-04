@@ -34,8 +34,8 @@ type MountManager struct {
 }
 
 type Mounter interface {
-	validate(source string) (string, error)
-	clear(source, target string) error
+	validate(device, mountpoint string) (string, error)
+	clear(device, target string) (string, error)
 }
 
 func (m *MountManager) Mount(device string) (string, error) {
@@ -91,7 +91,7 @@ func (m *MountManager) GetCache(device string) (string, error) {
 
 func (m *MountManager) SeekMountPointAndClearCache(device string) (string, error) {
 	defer m.RemoveCache(device)
-	mountPoint, err := seekMountPointWithCacheFallback(device)
+	mountPoint, err := m.seekMountPointWithCacheFallback(device)
 	if err != nil {
 		return "", fmt.Errorf("Unknown Device %s: %w", device, err)
 	}
@@ -111,7 +111,7 @@ func (m *MountManager) FindRelPath(device string, callback func(string) (string,
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
-	relPath, err := filepath.Rel(mountPoint, config.MPDLibraryFolder)
+	relPath, err := filepath.Rel(config.MPDLibraryFolder, mountPoint)
 	if err != nil {
 		return "", fmt.Errorf("Found mountpoint %s for device %s not in MPDLibraryFolder: %w", mountPoint, device, err)
 	}
@@ -124,7 +124,7 @@ func (m *MountManager) FindDevicePathAndCache(device string) (string, error) {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
 	m.AddCache(device, mountPoint)
-	validatedPath, err := m.mounter.validate(mountPoint)
+	validatedPath, err := m.mounter.validate(device, mountPoint)
 	if err != nil {
 		return "", fmt.Errorf("mounter validation failed: %w", err)
 	}
@@ -220,25 +220,25 @@ func populateMountPointCache(m *MountManager) {
 	}
 }
 
-func validateAndPreparePath(source string, callback func(string, string) error) (string, error) {
-	if strings.HasPrefix(source, config.MPDLibraryFolder) {
-		return source, nil // Already valid
+func validateAndPreparePath(device, mountpoint string, callback func(string, string, string) (string, error)) (string, error) {
+	if strings.HasPrefix(mountpoint, config.MPDLibraryFolder) {
+		return mountpoint, nil // Already valid
 	}
 
-	target := generateTarget(source)
-	if err := callback(source, target); err != nil {
-		return "", fmt.Errorf("Failed to create bind on %s for %s: %w", target, source, err)
+	target := generateTarget(mountpoint)
+	if _, err := callback(device, mountpoint, target); err != nil {
+		return "", fmt.Errorf("Failed to create bind on %s for %s: %w", target, mountpoint, err)
 	}
 	return target, nil
 }
 
 func generateTarget(source string) string {
 	target := filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder, filepath.Base(source))
-	folderInfo, err := os.Stat(target)
+	_, err := os.Stat(target)
 	if os.IsNotExist(err) {
 		return target
 	}
-	return fmt.SprintF("%s-%s", target, randomString(5))
+	return fmt.Sprintf("%s-%s", target, randomString(5))
 }
 
 func randomString(n int) string {

@@ -1,7 +1,6 @@
 package mounts
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,27 +9,26 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/jochenvg/go-udev"
 )
 
 type FuseFinder struct {
-	ctx        context.Context
 	fuseMounts map[string]*fuse.Server
 	mu         sync.RWMutex // Protects access to mounts
 }
 
-func newFuseFinder(ctx context.Context) *FuseFinder {
+func newFuseFinder() *FuseFinder {
 	return &FuseFinder{
-		ctx:        ctx,
 		fuseMounts: make(map[string]*fuse.Server),
 	}
 }
 
-func (f *FuseFinder) validate(device, mountpoint string) (string, error) {
+func (f *FuseFinder) validate(device *udev.Device, mountpoint string) (string, error) {
 	return validateAndPreparePath(device, mountpoint, f.createFuseMountAndCache)
 }
 
-func (f *FuseFinder) clear(source, target string) (string, error) {
-	return f.clearFuseMount(source, target)
+func (f *FuseFinder) clear(device *udev.Device, target string) (string, error) {
+	return f.clearFuseMount(device, target)
 }
 
 func (f *FuseFinder) AddServer(device string, server *fuse.Server) {
@@ -56,12 +54,12 @@ func (f *FuseFinder) GetServer(device string) (*fuse.Server, error) {
 	return server, nil
 }
 
-func (f *FuseFinder) createFuseMountAndCache(device, mountpoint, target string) (string, error) {
+func (f *FuseFinder) createFuseMountAndCache(device *udev.Device, mountpoint, target string) (string, error) {
 	server, err := f.createFuseMount(mountpoint, target)
 	if err != nil {
 		return "", fmt.Errorf("failed to create fuse mount for %s:%s: %w", mountpoint, target, err)
 	}
-	f.AddServer(device, server)
+	f.AddServer(device.Devnode(), server)
 	return target, nil
 }
 
@@ -97,20 +95,21 @@ func (f *FuseFinder) createFuseMount(source, target string) (*fuse.Server, error
 	return server, nil
 }
 
-func (f *FuseFinder) clearFuseMount(device, target string) (string, error) {
-	server, err := f.GetServer(device)
+func (f *FuseFinder) clearFuseMount(device *udev.Device, target string) (string, error) {
+	devnode := device.Devnode()
+	server, err := f.GetServer(devnode)
 	if err != nil {
-		return "", fmt.Errorf("Failed to find %s fuse server in cache: %w", device, err)
+		return "", fmt.Errorf("Failed to find %s fuse server in cache: %w", devnode, err)
 
 	}
 	if err = server.Unmount(); err != nil {
-		return "", fmt.Errorf("Failed to unmount %s fuse server in cache: %w", device, err)
+		return "", fmt.Errorf("Failed to unmount %s fuse server in cache: %w", devnode, err)
 	}
-	f.DeleteServer(device)
+	f.DeleteServer(devnode)
 	return target, nil
 }
 
 func WaitContext(server *fuse.Server) {
 	server.Wait()
-	log.Printf("Unmounted FUSE mount for %s", target)
+	log.Printf("Unmounted FUSE mount")
 }

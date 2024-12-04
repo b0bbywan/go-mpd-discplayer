@@ -89,70 +89,75 @@ func (s *SymlinkFinder) clearSymlinkCache(device, mountpoint string) (string, er
 	return path, nil
 }
 
+func validateSymlink(path string, info os.FileInfo) (string, error) {
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", fmt.Errorf("Path %s is not a symlink, skipping cleanup", path)
+	}
+	symlinkTarget, err := os.Readlink(path)
+	if err != nil {
+		log.Printf("%s symlink not dead: %s still exists", path, symlinkTarget)
+	}
+	return strings.TrimSuffix(symlinkTarget, "/"), nil
+}
+
 func checkSymlink(mountpoint, path string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return fmt.Errorf("Failed to stat path %s: %w", path, err)
 	}
-
-	// Only remove if it's a symlink
-	if info.Mode()&os.ModeSymlink == 0 {
-		return fmt.Errorf("Path %s is not a symlink, skipping cleanup", path)
+	symlinkTarget, err := validateSymlink(path, info)
+	if err != nil {
+		return fmt.Errorf("Invalid symlink %s: %w", path, err)
 	}
-	symlinkTarget, err := os.Readlink(path)
-	if err == nil {
-		log.Printf("%s symlink not dead: %s still exists", path, symlinkTarget)
-	}
-	if strings.TrimSuffix(symlinkTarget, "/") != strings.TrimSuffix(mountpoint, "/") {
+	if symlinkTarget != strings.TrimSuffix(mountpoint, "/") {
 		return fmt.Errorf("%s symlink do not match %s mountpoint", symlinkTarget, mountpoint)
 	}
 	return nil
 }
 
 func checkSymlinkPopulation(path string, info os.FileInfo) (string, error) {
-	if info.Mode()&os.ModeSymlink == 0 {
-		return "", fmt.Errorf("Path %s is not a symlink", path)
-	}
-
-	// TODO: fix: dead symlink not detected
-	symlinkTarget, err := os.Readlink(path)
+	symlinkTarget, err := validateSymlink(path, info)
 	if err != nil {
-		// TODO: Delete dead symlink before returning error
-		log.Printf("dead symlink")
-		return "", fmt.Errorf("Symlink %s is dead: %w", path, err)
+		return "", fmt.Errorf("Invalid symlink %s: %w", path, err)
 	}
-	device, err := isSymlinkMountpoint(strings.TrimSuffix(symlinkTarget, "/"))
+	device, err := isSymlinkMountpoint(symlinkTarget)
 	if err != nil {
-		return "", fmt.Errorf("device for %s not found: %w", symlinkTarget, err)
+		return "", fmt.Errorf("Device for %s not found: %w", symlinkTarget, err)
 	}
-	log.Printf("symlink %s:%s valid", path, symlinkTarget)
+	log.Printf("Symlink %s -> %s valid", path, symlinkTarget)
 
 	return device, nil
 }
 
-func isSymlinkMountpoint(path string) (string,error) {
-	log.Printf("checking %s mountpoint", path)
+func isSymlinkMountpoint(path string) (string, error) {
 	var device string
-	if err := readMountsFile(func(d, mp string) {
+	deviceFinder := func(d, mp string) {
 		if mp == path {
 			device = d
+			return
 		}
-	}); err != nil {
-		return "", fmt.Errorf("failed to read mount file while checking symlink %s: %w", path, err)
+	}
+
+	if err := readMountsFile(deviceFinder); err != nil {
+		return "", fmt.Errorf("Failed to read mount file while checking symlink %s: %w", path, err)
 	}
 
 	if device == "" {
 		return "", fmt.Errorf("Path %s not found in mountfile, not a mount", path)
 	}
-	fmt.Printf("found device %s for %s path", device, path)
+	fmt.Printf("Found device %s for %s path", device, path)
 	return device, nil
 }
 
 func populateSymlinkCache(s *SymlinkFinder) {
-	err := filepath.Walk(filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder), func(path string, info os.FileInfo, err error) error {
+	mpdUSBFolder := filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder)
+	if _, err := os.Stat(mpdUSBFolder); err != nil && os.IsNotExist(err) {
+		log.Println("MPD USB Folder does not exist for now")
+		return
+	}
+	symlinkWalker := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Printf("path Error for %s(%v): %v", path, info, err)
-			return err
+			return fmt.Errorf("path Error for %s: %w", path, err)
 		}
 		if info.Name() == config.MPDUSBSubfolder {
 			return nil
@@ -160,14 +165,18 @@ func populateSymlinkCache(s *SymlinkFinder) {
 
 		trimmedPath := strings.TrimSuffix(path, "/")
 		device, err := checkSymlinkPopulation(trimmedPath, info)
-		if  err != nil {
-			log.Printf("invalid symlink %s: %v", trimmedPath, err)
+		if err != nil {
+			if err = os.Remove(path); err != nil {
+				return fmt.Errorf("Failed to remove symlink %s: %w", path, err)
+			}
 		}
 		s.AddCache(device, trimmedPath)
 		return nil
-	})
-	if err != nil {
-		log.Printf("walk failed")
 	}
-	log.Printf("symlink populated")
+
+	if err := filepath.Walk(mpdUSBFolder, symlinkWalker); err != nil {
+		log.Printf("Walk failed: %v", err)
+		return
+	}
+	log.Printf("Symlink populated")
 }

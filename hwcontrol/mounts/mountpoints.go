@@ -53,12 +53,13 @@ func NewMountManager(ctx context.Context) (*MountManager, error) {
 	default:
 		return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
 	}
-
-	return &MountManager{
+	m := &MountManager{
 		ctx:         ctx,
 		mountPoints: make(map[string]string),
 		mounter:     mounter,
-	}, nil
+	}
+	populateMountPointCache(m)
+	return m, nil
 }
 
 // Add a device-to-mount-point association
@@ -155,14 +156,20 @@ func (m *MountManager) seekMountPointWithCacheFallback(device string) (string, e
 	return "", fmt.Errorf("Failed to find %s in mount file and cache", device)
 }
 
-func isMPDDir(devnode, mountPoint string) bool {
+func isRemovableNode(devnode, mountPoint string) bool {
 	if !strings.HasPrefix(devnode, "/dev") {
 		return false
 	}
 	if !USBNameRegex.MatchString(filepath.Base(devnode)) {
 		return false
 	}
-	if !strings.HasPrefix(mountPoint, config.MPDLibraryFolder) {
+	if mountPoint == "/" ||
+		mountPoint == "/home" ||
+		mountPoint == "/var" ||
+		strings.HasPrefix(mountPoint, "/var/lib/docker") ||
+		strings.HasPrefix(mountPoint, "/boot") ||
+		strings.HasPrefix(mountPoint, "/proc") ||
+		strings.HasPrefix(mountPoint, "/dev") {
 		return false
 	}
 	return true
@@ -170,11 +177,14 @@ func isMPDDir(devnode, mountPoint string) bool {
 
 func seekMountPoint(device string) (string, error) {
 	var mountPoint string
-	if err := readMountsFile(func(d, mp string) {
+	mountPointSeeker := func(d, mp string) {
 		if d == device {
 			mountPoint = mp
+			return
 		}
-	}); err != nil {
+	}
+
+	if err := readMountsFile(mountPointSeeker); err != nil {
 		return "", fmt.Errorf("Failed to seek mount point %s: %w", device, err)
 	}
 
@@ -186,7 +196,7 @@ func seekMountPoint(device string) (string, error) {
 
 func populateMountPointCache(m *MountManager) {
 	if err := readMountsFile(func(device, mountPoint string) {
-		if isMPDDir(device, mountPoint) {
+		if isRemovableNode(device, mountPoint) {
 			m.AddCache(device, mountPoint)
 		}
 	}); err != nil {

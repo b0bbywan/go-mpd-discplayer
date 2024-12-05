@@ -49,8 +49,14 @@ type RootNotifier struct {
 
 // NewRootNotifier creates a new instance of RootNotifier.
 func NewRootNotifier() *RootNotifier {
+	sc, err := NewSoundCache(soundPaths)
+	if err != nil {
+		log.Printf("Failed to create RootNotifier: %w", err)
+		return nil
+	}
+	log.Printf("Root notifier initialized")
 	return &RootNotifier{
-		sc: NewSoundCache(soundPaths),
+		sc: sc,
 	}
 }
 

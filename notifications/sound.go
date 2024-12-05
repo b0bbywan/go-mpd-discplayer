@@ -17,12 +17,12 @@ type Sound struct {
 	Format   beep.Format
 }
 
-type SoundCache struct {
+type BeepSoundCache struct {
 	sounds map[string]*Sound
 	sync.Mutex
 }
 
-func NewSoundCache(soundsPath map[string]string) *SoundCache {
+func NewBeepSoundCache(soundsPath map[string]string) *BeepSoundCache {
 	soundCache := &SoundCache{sounds: make(map[string]*Sound)}
 	for k, v := range soundsPath {
 		log.Printf("Loading %s in RAM", v)

@@ -4,22 +4,22 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/spf13/viper"
 )
 
 const (
-	AppName		= "mpd-discplayer"
-	AppVersion	= "0.4"
+	AppName    = "mpd-discplayer"
+	AppVersion = "0.4"
 )
 
 type MPDConn struct {
-	Type    string // "unix" or "tcp"
-	Address string // socket path or TCP address
+	Type          string // "unix" or "tcp"
+	Address       string // socket path or TCP address
 	ReconnectWait time.Duration
 }
 
@@ -40,9 +40,9 @@ func init() {
 	viper.SetDefault("DiscSpeed", 12)
 
 	// Load from configuration file, environment variables, and CLI flags
-	viper.SetConfigName("config")  // name of config file (without extension)
-	viper.SetConfigType("yaml")    // config file format
-	viper.AddConfigPath(filepath.Join("/etc", config.AppName))  // Global configuration path
+	viper.SetConfigName("config")                              // name of config file (without extension)
+	viper.SetConfigType("yaml")                                // config file format
+	viper.AddConfigPath(filepath.Join("/etc", config.AppName)) // Global configuration path
 	if home, err := os.UserHomeDir(); err == nil {
 		viper.AddConfigPath(filepath.Join(home, ".config", AppName)) // User config path
 	}
@@ -63,9 +63,9 @@ func init() {
 	DiscSpeed = viper.GetInt("DiscSpeed")
 	// Populate the MPDConnection struct
 	MPDConnection = MPDConn{
-		Type:    viper.GetString("MPDConnection.Type"),
-		Address: viper.GetString("MPDConnection.Address"),
-		ReconnectWait: time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
+		Type:          viper.GetString("MPDConnection.Type"),
+		Address:       viper.GetString("MPDConnection.Address"),
+		ReconnectWait: time.Duration(viper.GetInt("MPDConnection.ReconnectWait") * int(time.Second)),
 	}
 	if err = validateMPDConnection(MPDConnection); err != nil {
 		log.Fatalf("Error validating MPD Connection: %w", err)

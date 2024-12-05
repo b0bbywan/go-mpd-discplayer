@@ -8,9 +8,9 @@ import (
 )
 
 var soundPaths = map[string]string{
-	"add":    filepath.Join(config.SoundsLocation, "in.wav"),
-	"remove": filepath.Join(config.SoundsLocation, "out.wav"),
-	"error":  filepath.Join(config.SoundsLocation, "error.wav"),
+	"add":    filepath.Join(config.SoundsLocation, "in.mp3"),
+	"remove": filepath.Join(config.SoundsLocation, "out.mp3"),
+	"error":  filepath.Join(config.SoundsLocation, "error.mp3"),
 }
 
 type Notifier struct {
@@ -49,8 +49,14 @@ type RootNotifier struct {
 
 // NewRootNotifier creates a new instance of RootNotifier.
 func NewRootNotifier() *RootNotifier {
+	sc, err := NewSoundCache(soundPaths)
+	if err != nil {
+		log.Printf("Failed to create RootNotifier: %w", err)
+		return nil
+	}
+	log.Printf("Root notifier initialized")
 	return &RootNotifier{
-		sc: NewSoundCache(soundPaths),
+		sc: sc,
 	}
 }
 

@@ -14,15 +14,15 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
+func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
 	handlers := hwcontrol.NewBasicUSBHandlers()
-	mounter, err := mounts.NewMountManager(ctx)
+	mounter, err := mounts.NewMountManager(ctx, mpdClient)
 	if err != nil {
 		log.Printf("Failed to create mounter: %v\nUSB Playback disabled", err)
 		return nil
 	}
 	startUSBPlayback := func(device *udev.Device) error {
-		relPath, err := mounter.Mount(device.Devnode())
+		relPath, err := mounter.Mount(device)
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[0].Name(), device.Devnode(), err)
 		}
@@ -33,7 +33,7 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 	}
 
 	stopUSBPlayback := func(device *udev.Device) error {
-		relPath, err := mounter.Unmount(device.Devnode())
+		relPath, err := mounter.Unmount(device)
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[1].Name(), device.Devnode(), err)
 		}

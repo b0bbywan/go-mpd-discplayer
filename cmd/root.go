@@ -43,7 +43,7 @@ func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.Reconnect
 	var handlers []*hwcontrol.EventHandler
 	// Create event handlers (subscribers) passing the context
 	handlers = append(handlers, newDiscHandlers(wg, mpdClient, notifier)...)
-	handlers = append(handlers, newUSBHandlers(wg, mpdClient, notifier)...)
+	handlers = append(handlers, newUSBHandlers(wg, ctx, mpdClient, notifier)...)
 	for _, handler := range handlers {
 		handler.StartSubscriber(wg, ctx) // Use the passed context
 	}

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jochenvg/go-udev"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
@@ -48,16 +50,16 @@ func (s *SymlinkFinder) GetCache(source string) (string, error) {
 	return "", fmt.Errorf("%s mount point does not exist in cache", source)
 }
 
-func (s *SymlinkFinder) validate(device, mountpoint string) (string, error) {
+func (s *SymlinkFinder) validate(device *udev.Device, mountpoint string) (string, error) {
 	return validateAndPreparePath(device, mountpoint, s.createSymlink)
 }
 
-func (s *SymlinkFinder) clear(source, mountpoint string) (string, error) {
-	return s.clearSymlinkCache(source, mountpoint)
+func (s *SymlinkFinder) clear(device *udev.Device, mountpoint string) (string, error) {
+	return s.clearSymlinkCache(device, mountpoint)
 }
 
 // Helper function to create a symbolic link
-func (s *SymlinkFinder) createSymlink(device, mountpoint, target string) (string, error) {
+func (s *SymlinkFinder) createSymlink(device *udev.Device, mountpoint, target string) (string, error) {
 	// Ensure the target directory exists
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return "", fmt.Errorf("Error creating target directory: %w", err)
@@ -67,25 +69,26 @@ func (s *SymlinkFinder) createSymlink(device, mountpoint, target string) (string
 	if err := os.Symlink(mountpoint, target); err != nil {
 		return "", fmt.Errorf("Error creating symlink from %s to %s: %w", mountpoint, target, err)
 	}
-	s.AddCache(device, target)
+	s.AddCache(device.Devnode(), target)
 	return target, nil
 }
 
-func (s *SymlinkFinder) clearSymlinkCache(device, mountpoint string) (string, error) {
-	path, err := s.GetCache(device)
+func (s *SymlinkFinder) clearSymlinkCache(device *udev.Device, mountpoint string) (string, error) {
+	devnode := device.Devnode()
+	path, err := s.GetCache(devnode)
 	if err != nil {
-		return "", fmt.Errorf("Unknown device %s", device)
+		return "", fmt.Errorf("Unknown device %s", devnode)
 	}
 	// Check if the path is a symlink
 	if err = checkSymlink(mountpoint, path); err != nil {
-		return "", fmt.Errorf("Invalid cached symlink %s for [%s:%s]: %w", path, device, mountpoint, err)
+		return "", fmt.Errorf("Invalid cached symlink %s for [%s:%s]: %w", path, devnode, mountpoint, err)
 	}
 
 	if err = os.Remove(path); err != nil {
 		return "", fmt.Errorf("Failed to remove symlink %s: %w", path, err)
 	}
 	log.Printf("Successfully cleared %s cache", path)
-	s.RemoveCache(device)
+	s.RemoveCache(devnode)
 	return path, nil
 }
 

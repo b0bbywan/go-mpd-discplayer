@@ -10,7 +10,6 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/cue"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
 const CDDAPathPrefix = "cdda://"
@@ -81,7 +80,7 @@ func clearQueue(client *mpd.Client) error {
 
 // loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
 func loadCDDATracks(client *mpd.Client, device string) error {
-	trackCount, err := hwcontrol.GetTrackCount(device)
+	trackCount, err := getTrackCount(device)
 	if err != nil {
 		return fmt.Errorf("failed to get track count: %w", err)
 	}

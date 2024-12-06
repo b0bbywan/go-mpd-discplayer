@@ -15,13 +15,13 @@ import (
 
 func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) []*hwcontrol.EventHandler {
 	handlers := hwcontrol.NewBasicUSBHandlers()
-	mounter, err := mounts.NewMountManager(ctx)
+	mounter, err := mounts.NewMountManager(ctx, mpdClient)
 	if err != nil {
 		log.Printf("Failed to create mounter, USB Playback disabled")
 		return nil
 	}
 	startUSBPlayback := func(device *udev.Device) error {
-		relPath, err := mounter.Mount(device.Devnode())
+		relPath, err := mounter.Mount(device)
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[0].Name(), device.Devnode(), err)
 		}
@@ -32,7 +32,7 @@ func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplaye
 	}
 
 	stopUSBPlayback := func(device *udev.Device) error {
-		relPath, err := mounter.Unmount(device.Devnode())
+		relPath, err := mounter.Unmount(device)
 		if err != nil {
 			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[1].Name(), device.Devnode(), err)
 		}

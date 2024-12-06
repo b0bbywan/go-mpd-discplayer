@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jochenvg/go-udev"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
@@ -37,7 +39,7 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 	return nil
 }
 
-func validateAndPreparePath(device, mountpoint string, callback func(string, string, string) (string, error)) (string, error) {
+func validateAndPreparePath(device *udev.Device, mountpoint string, callback func(*udev.Device, string, string) (string, error)) (string, error) {
 	if strings.HasPrefix(mountpoint, config.MPDLibraryFolder) {
 		return mountpoint, nil // Already valid
 	}

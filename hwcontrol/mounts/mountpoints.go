@@ -10,7 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jochenvg/go-udev"
+
 	"github.com/b0bbywan/go-mpd-discplayer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 const (
@@ -30,19 +33,19 @@ type MountManager struct {
 }
 
 type Mounter interface {
-	validate(device, mountpoint string) (string, error)
-	clear(device, target string) (string, error)
+	validate(device *udev.Device, mountpoint string) (string, error)
+	clear(device *udev.Device, target string) (string, error)
 }
 
-func (m *MountManager) Mount(device string) (string, error) {
+func (m *MountManager) Mount(device *udev.Device) (string, error) {
 	return m.FindRelPath(device, m.FindDevicePathAndCache)
 }
 
-func (m *MountManager) Unmount(device string) (string, error) {
+func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 	return m.FindRelPath(device, m.SeekMountPointAndClearCache)
 }
 
-func NewMountManager(ctx context.Context) (*MountManager, error) {
+func NewMountManager(ctx context.Context, client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
 	var mounter Mounter
 
 	switch config.MountConfig {
@@ -86,11 +89,11 @@ func (m *MountManager) GetCache(device string) (string, error) {
 	return "", fmt.Errorf("%s mount point does not exist in cache", device)
 }
 
-func (m *MountManager) SeekMountPointAndClearCache(device string) (string, error) {
-	defer m.RemoveCache(device)
-	mountPoint, err := m.seekMountPointWithCacheFallback(device)
+func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string, error) {
+	defer m.RemoveCache(device.Devnode())
+	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
 	if err != nil {
-		return "", fmt.Errorf("Unknown Device %s: %w", device, err)
+		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
 	}
 
 	if strings.HasPrefix(mountPoint, config.MPDLibraryFolder) {
@@ -103,10 +106,10 @@ func (m *MountManager) SeekMountPointAndClearCache(device string) (string, error
 	return mountPoint, nil
 }
 
-func (m *MountManager) FindRelPath(device string, callback func(string) (string, error)) (string, error) {
+func (m *MountManager) FindRelPath(device *udev.Device, callback func(*udev.Device) (string, error)) (string, error) {
 	mountPoint, err := callback(device)
 	if err != nil {
-		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device.Devnode(), err)
 	}
 	relPath, err := filepath.Rel(config.MPDLibraryFolder, mountPoint)
 	if err != nil {
@@ -115,12 +118,12 @@ func (m *MountManager) FindRelPath(device string, callback func(string) (string,
 	return relPath, nil
 }
 
-func (m *MountManager) FindDevicePathAndCache(device string) (string, error) {
-	mountPoint, err := m.findMountPointWithRetry(device, RetryTimeout, RetryInterval)
+func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, error) {
+	mountPoint, err := m.findMountPointWithRetry(device.Devnode(), RetryTimeout, RetryInterval)
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
-	m.AddCache(device, mountPoint)
+	m.AddCache(device.Devnode(), mountPoint)
 	validatedPath, err := m.mounter.validate(device, mountPoint)
 	if err != nil {
 		return "", fmt.Errorf("mounter validation failed: %w", err)

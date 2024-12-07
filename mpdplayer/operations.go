@@ -10,7 +10,6 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/cue"
 	"github.com/b0bbywan/go-mpd-discplayer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 )
 
 const CDDAPathPrefix = "cdda://"
@@ -54,6 +53,28 @@ func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
 	})
 }
 
+func (rc *ReconnectingMPDClient) Mount(neighbor, label string) error {
+	neighborDiskId := fmt.Sprintf("udisks://by-uuid-%s", neighbor)
+	return rc.execute(func(client *mpd.Client) error {
+		if err := findNeighbor(rc.client, neighborDiskId); err != nil {
+			return fmt.Errorf("Failed to find %s in neighbors list: %w", neighbor, err)
+		}
+		if err := mount(rc.client, neighborDiskId, label); err != nil {
+			return fmt.Errorf("Failed to mount %s -> %s: %w", neighbor, label, err)
+		}
+		return nil
+	})
+}
+
+func (rc *ReconnectingMPDClient) Unmount(label string) error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := unmount(rc.client, label); err != nil {
+			return fmt.Errorf("Failed to unmount %s: %w", label, err)
+		}
+		return nil
+	})
+}
+
 // attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
 // If loading the CUE file fails, it falls back to loading individual CDDA tracks,
 func attemptToLoadCD(client *mpd.Client, device string) error {
@@ -81,7 +102,7 @@ func clearQueue(client *mpd.Client) error {
 
 // loadCDDATracks adds individual CDDA tracks to the MPD playlist based on the track count.
 func loadCDDATracks(client *mpd.Client, device string) error {
-	trackCount, err := hwcontrol.GetTrackCount(device)
+	trackCount, err := getTrackCount(device)
 	if err != nil {
 		return fmt.Errorf("failed to get track count: %w", err)
 	}
@@ -199,4 +220,31 @@ func DbUpdating(client *mpd.Client) bool {
 	}
 	_, updating := status["updating_db"]
 	return updating
+}
+
+func findNeighbor(client *mpd.Client, neighbor string) error {
+	res, err := client.Command("listneighbors").AttrsList("neighbor")
+	if err != nil {
+		return fmt.Errorf("Failed to list neighbors, is udisk neighbor plugin enabled ?: %w", err)
+	}
+	for _, v := range res {
+		if neighbor == v["neighbor"] {
+			return nil
+		}
+	}
+	return fmt.Errorf("neighbor %s not found", neighbor)
+}
+
+func mount(client *mpd.Client, neighbor, label string) error {
+	if err := client.Command("mount", label, neighbor).OK(); err != nil {
+		return fmt.Errorf("Mount %s -> %s failed: %w", neighbor, label, err)
+	}
+	return nil
+}
+
+func unmount(client *mpd.Client, label string) error {
+	if err := client.Command("unmount", label).OK(); err != nil {
+		return fmt.Errorf("Unmount %s failed: %w", label, err)
+	}
+	return nil
 }

@@ -7,8 +7,6 @@ import (
 
 	"github.com/jochenvg/go-udev"
 	"golang.org/x/sys/unix"
-
-	"github.com/b0bbywan/go-disc-cuer/utils"
 )
 
 const (
@@ -80,10 +78,6 @@ func checkDiscChange(action string) bool {
 	}
 	log.Printf("Unhandled action: %s\n", action)
 	return false
-}
-
-func GetTrackCount(device string) (int, error) {
-	return utils.GetTrackCount(device)
 }
 
 func SetDiscSpeed(device string, speed int) error {

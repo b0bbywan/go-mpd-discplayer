@@ -41,6 +41,8 @@ func NewNotifier() *Notifier {
 	switch config.AudioBackend {
 	case "alsa":
 		player, err = NewOtoPlayer(sc)
+	case "pulse":
+		player, err = NewPulseAudioPlayer(sc)
 	case "none":
 		log.Printf("Notifications disabled\n")
 		return nil

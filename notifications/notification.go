@@ -19,6 +19,10 @@ type Notifier struct {
 	error    string
 }
 
+type Player interface {
+	Play(name string) error
+}
+
 func newNotifier(notifier *RootNotifier, sucessSound, errorSound string) *Notifier {
 	return &Notifier{
 		notifier: notifier,
@@ -44,25 +48,25 @@ func NewRemoveNotification(notifier *RootNotifier) *Notifier {
 }
 
 type RootNotifier struct {
-	sc *SoundCache
+	player Player
 }
 
 // NewRootNotifier creates a new instance of RootNotifier.
 func NewRootNotifier() *RootNotifier {
-	sc, err := NewSoundCache(soundPaths)
+	otoPlayer, err := NewOtoPlayer(soundPaths)
 	if err != nil {
 		log.Printf("Failed to create RootNotifier: %w", err)
 		return nil
 	}
 	log.Printf("Root notifier initialized")
 	return &RootNotifier{
-		sc: sc,
+		player: otoPlayer,
 	}
 }
 
 func (n *RootNotifier) Play(name string) {
 	go func() {
-		if err := n.sc.Play(name); err != nil {
+		if err := n.player.Play(name); err != nil {
 			log.Printf("Failed to play sound (%s): %v", name, err)
 		}
 	}()

@@ -53,14 +53,30 @@ type RootNotifier struct {
 
 // NewRootNotifier creates a new instance of RootNotifier.
 func NewRootNotifier() *RootNotifier {
-	otoPlayer, err := NewOtoPlayer(soundPaths)
-	if err != nil {
-		log.Printf("Failed to create RootNotifier: %w", err)
+	var player Player
+	var err error
+	switch config.AudioBackend {
+	case "pulse":
+		if player, err = NewPulseAudioPlayer(soundPaths); err != nil {
+			log.Printf("Failed to start Pulseaudio client: %v", err)
+			return nil
+		}
+	case "alsa":
+		if player, err = NewOtoPlayer(soundPaths); err != nil {
+			log.Printf("Failed to init Alsa client: %v", err)
+			return nil
+		}
+	case "none":
+		log.Printf("Notifications disabled\n")
+		return nil
+	default:
+		log.Printf("Unsupported AudioBackend option. Notifications disabled")
 		return nil
 	}
+
 	log.Printf("Root notifier initialized")
 	return &RootNotifier{
-		player: otoPlayer,
+		player: player,
 	}
 }
 

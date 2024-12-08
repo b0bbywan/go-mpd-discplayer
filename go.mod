@@ -7,6 +7,7 @@ require (
 	github.com/fhs/gompd/v2 v2.3.0
 	github.com/hajimehoshi/go-mp3 v0.3.0
 	github.com/hajimehoshi/oto/v2 v2.4.2
+	github.com/jfreymuth/pulse v0.1.1
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/spf13/viper v1.19.0
 	golang.org/x/sys v0.27.0

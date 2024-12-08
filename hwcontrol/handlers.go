@@ -31,13 +31,13 @@ func (h *EventHandler) DeviceFilter(device *udev.Device) bool {
 	return false
 }
 
-func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error, notifier *notifications.Notifier) {
+func (h *EventHandler) SetProcessor(wg *sync.WaitGroup, actionLog string, processor func(device *udev.Device) error, notifier *notifications.Notifier, event string) {
 	h.processFunc = func(device *udev.Device) error {
 		log.Println(actionLog)
 		wg.Add(1) // Increment the counter before starting the task
 		go func() {
 			if notifier != nil {
-				notifier.PlaySuccess()
+				notifier.PlayEvent(event)
 			}
 
 			defer wg.Done()

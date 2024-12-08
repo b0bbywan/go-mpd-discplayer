@@ -38,7 +38,7 @@ func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action st
 }
 
 func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) error {
-	notifier := notifications.NewRootNotifier()
+	notifier := notifications.NewNotifier()
 	var handlers []*hwcontrol.EventHandler
 	// Create event handlers (subscribers) passing the context
 	handlers = append(handlers, newDiscHandlers(wg, mpdClient, notifier)...)

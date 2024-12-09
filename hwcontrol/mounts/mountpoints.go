@@ -39,8 +39,6 @@ func NewMountManager(client *mpdplayer.ReconnectingMPDClient) (*MountManager, er
 	var mounter Mounter
 
 	switch config.MountConfig {
-	case "fuse":
-		mounter = newFuseFinder()
 	case "symlink":
 		mounter = newSymlinkFinder()
 	default:

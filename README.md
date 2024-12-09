@@ -7,11 +7,12 @@
 
 ## Features
 
-- **Disc Playback Automation**: Monitors for inserted audio discs and generates CUE files using go-disc-cuer before playing on mpd server
-- **USB disk Playback Automation**: Monitors removable usb media to play them on mpd.server
+- **Audio Disc Playback Automation**: Monitors for inserted audio discs and generates CUE files using go-disc-cuer before playing on mpd server
+- **USB Stick Playback Automation**: Monitors removable usb media to play them on mpd.server
 - **Reconnection Logic**: Automatically reconnects to the MPD server if the connection is lost.
-- **Configurable Settings**: Supports configuration via a unified config file or environment variables.
 - **Reliable Connection Management**: Thread-safe operations to manage MPD client connections and operations.
+- **Configurable Settings**: Supports configuration via a unified config file or environment variables.
+- **Audio Notifications**: Audio notifications are triggered on device insertion and removal, and critical errors encountered while processing those events
 
 
 ## Installation
@@ -30,9 +31,9 @@ Ensure libgudev and libdiscid are installed. Run the following commands based on
 
 ```bash
 # Debian
-sudo apt install libdiscid0 libdiscid-dev libgudev-1.0-0 libgudev-1.0-dev
+sudo apt install libdiscid0 libdiscid-dev libgudev-1.0-0 libgudev-1.0-dev libasound2-dev
 # Fedora
-sudo dnf install libdiscid libdiscid-devel libgudev libgudev-devel
+sudo dnf install libdiscid libdiscid-devel libgudev libgudev-devel alsa-lib-devel
 ```
 
 ### Build the Project
@@ -45,9 +46,10 @@ go build -o mpd-discplayer
 
 Simply run the program. mpd-discplayer will:
 
-- Monitor the system for an audio disc insertion.
-- Automatically use go-disc-cuer to generate a CUE file.
-- Play the disc on the MPD server.
+- Monitor the system for an audio disc or USB stick insertion.
+- Automatically use go-disc-cuer to generate a CUE file for inserted audio disc.
+- Play the disc or USB on the MPD server.
+- Trigger audio notifications on device insertion and removal, and errors.
 
 ```bash
 ./mpd-discplayer
@@ -77,6 +79,9 @@ MPDConnection:
   ReconnectWait: 30
 MPDLibraryFolder: "/var/lib/mpd/music"
 DiscSpeed: 12
+SoundsLocation: "/usr/local/share/mpd-discplayer"
+AudioBackend: "pulse"
+PulseServer: ""
 
 ```
 
@@ -91,20 +96,29 @@ The type of connection to use. Supported values:
 	- For Type: `"unix"`, this is the path to the MPD socket file (e.g., `/var/run/mpd/socket`).
 	- For Type: `"tcp"`, this is the <hostname>:<port> of the MPD server (e.g., `127.0.0.1:6600`) *(default)*.
 
+
+#### Notifications Options
+- **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
+- **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
+- **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.mp3`, `out.mp3` and `error.mp3` to be present in the specified folder or notifications will be disabled.
+
+
 ### Environment Variables
 
 If a configuration file is not provided, you can use environment variables to set the same options. Below is the list of supported variables and their defaults (if applicable):
 
 | Environment Variable           | YAML equivalent                          | Default Value                  |
 |--------------------------------|--------------------------------------|--------------------------------|
-| `MPD_DISCPLAYER_GNUHELLOEMAIL`     | `gnuHelloEmail`.      | *(no default,  empty value disable the integration)*      |
-| `MPD_DISCPLAYER_GNUDBURL`          | `gnuDbUrl`.           | `https://gnudb.gnudb.org`    |
-| `MPD_DISCPLAYER_MPDCONNECTION_TYPE`         | `MPDConnection.Type`. | `tcp`                        |
-| `MPD_DISCPLAYER_MPDCONNECTION_ADDRESS`      | `MPDConnection.Address`. | `127.0.0.1:6600`   |
-| `MPD_DISCPLAYER_MPDCONNECTION_RECONNECTWAIT`      | `MPDConnection.ReconnectWait`. | `30` (in seconds)          |
+| `MPD_DISCPLAYER_GNUHELLOEMAIL`     | `gnuHelloEmail`      | *(no default,  empty value disable the integration)*      |
+| `MPD_DISCPLAYER_GNUDBURL`          | `gnuDbUrl`           | `https://gnudb.gnudb.org`    |
+| `MPD_DISCPLAYER_MPDCONNECTION_TYPE`         | `MPDConnection.Type` | `tcp`                        |
+| `MPD_DISCPLAYER_MPDCONNECTION_ADDRESS`      | `MPDConnection.Address` | `127.0.0.1:6600`   |
+| `MPD_DISCPLAYER_MPDCONNECTION_RECONNECTWAIT`      | `MPDConnection.ReconnectWait` | `30` (in seconds)          |
 | `MPD_DISCPLAYER_MPDLIBRARYFOLDER` | `MPDLibraryFolder` | `/var/lib/mpd/music`
 | `MPD_DISCPLAYER_DISCSPEED` | `DiscSpeed` | `12`
-
+| `MPD_DISCPLAYER_SOUNDSLOCATION` | `SoundsLocation` | `/usr/local/share/mpd-discplayer`
+| `MPD_DISCPLAYER_AUDIOBACKEND` | `AudioBackend` | `pulse`
+| `MPD_DISCPLAYER_PULSESERVER` | `PulseServer` | *(Default to "", e.g. local unix socket)*
 
 #### Priority of Configuration
 The configuration is loaded in the following order of priority:
@@ -118,5 +132,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Contributing
 Contributions are welcome! Feel free to fork this repository, make changes, and create a pull request.
 
-Acknowledgments
+## Acknowledgments
 Thanks to [gompd](https://github.com/fhs/gompd) for the underlying MPD client implementation.

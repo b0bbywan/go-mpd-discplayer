@@ -38,7 +38,8 @@ func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action st
 }
 
 func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) error {
-	notifier := notifications.NewRootNotifier()
+	notifier := notifications.NewNotifier()
+	defer closeNotifier(notifier)
 	var handlers []*hwcontrol.EventHandler
 	// Create event handlers (subscribers) passing the context
 	handlers = append(handlers, newDiscHandlers(wg, mpdClient, notifier)...)
@@ -50,7 +51,7 @@ func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.Reconnect
 	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
 	go loop(wg, ctx, handlers)
-
+	<-ctx.Done()
 	return nil
 }
 
@@ -68,5 +69,11 @@ func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHa
 				continue
 			}
 		}
+	}
+}
+
+func closeNotifier(notifier *notifications.Notifier) {
+	if notifier != nil {
+		notifier.Close()
 	}
 }

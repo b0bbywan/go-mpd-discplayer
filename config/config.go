@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/b0bbywan/go-disc-cuer/config"
+  "github.com/b0bbywan/go-disc-cuer/config"
 )
 
 const (
@@ -30,6 +30,8 @@ var (
 	TargetDevice     string
 	DiscSpeed        int
 	SoundsLocation   string
+	AudioBackend     string
+	PulseServer      string
 	CuerConfig       *config.Config
 )
 
@@ -40,8 +42,10 @@ func init() {
 	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
 	viper.SetDefault("DiscSpeed", 12)
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
+	viper.SetDefault("AudioBackend", "pulse")
+	viper.SetDefault("PulseServer", "")
 
-	// Load from configuration file, environment variables, and CLI flags
+  // Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                              // name of config file (without extension)
 	viper.SetConfigType("yaml")                                // config file format
 	viper.AddConfigPath(filepath.Join("/etc", config.AppName)) // Global configuration path
@@ -64,7 +68,10 @@ func init() {
 
 	DiscSpeed = viper.GetInt("DiscSpeed")
 	SoundsLocation = viper.GetString("SoundsLocation")
-	// Populate the MPDConnection struct
+	AudioBackend = viper.GetString("AudioBackend")
+	PulseServer = viper.GetString("PulseServer")
+
+  // Populate the MPDConnection struct
 	MPDConnection = MPDConn{
 		Type:          viper.GetString("MPDConnection.Type"),
 		Address:       viper.GetString("MPDConnection.Address"),

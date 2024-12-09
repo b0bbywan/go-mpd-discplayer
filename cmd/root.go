@@ -9,6 +9,7 @@ import (
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
 const (
@@ -37,10 +38,12 @@ func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action st
 }
 
 func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient) error {
+	notifier := notifications.NewNotifier()
+	defer closeNotifier(notifier)
 	var handlers []*hwcontrol.EventHandler
 	// Create event handlers (subscribers) passing the context
-	handlers = append(handlers, newDiscHandlers(wg, mpdClient)...)
-	handlers = append(handlers, newUSBHandlers(wg, mpdClient)...)
+	handlers = append(handlers, newDiscHandlers(wg, mpdClient, notifier)...)
+	handlers = append(handlers, newUSBHandlers(wg, mpdClient, notifier)...)
 	for _, handler := range handlers {
 		handler.StartSubscriber(wg, ctx) // Use the passed context
 	}
@@ -48,7 +51,7 @@ func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.Reconnect
 	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
 	go loop(wg, ctx, handlers)
-
+	<-ctx.Done()
 	return nil
 }
 
@@ -66,5 +69,11 @@ func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHa
 				continue
 			}
 		}
+	}
+}
+
+func closeNotifier(notifier *notifications.Notifier) {
+	if notifier != nil {
+		notifier.Close()
 	}
 }

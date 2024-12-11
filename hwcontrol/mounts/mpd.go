@@ -39,18 +39,18 @@ func (m *mpdFinder) clear(device *udev.Device, mountpoint string) (string, error
 func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (string, error) {
 	udiskId := device.PropertyValue("ID_FS_UUID")
 	label := device.PropertyValue("ID_FS_LABEL")
-	if err := m.client.Mount(udiskId, label); err != nil {
+	if err := m.client.Mount(udiskId, filepath.Join(config.MPDUSBSubfolder, label)); err != nil {
 		return "", fmt.Errorf("Failed to mount %s -> %s: %w", device.Devnode(), target, err)
 	}
-	return filepath.Join(config.MPDLibraryFolder, label), nil
+	return filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder, label), nil
 }
 
 func (m *mpdFinder) unmount(device *udev.Device) (string, error) {
 	label := device.PropertyValue("ID_FS_LABEL")
-	if err := m.client.Unmount(label); err != nil {
+	if err := m.client.Unmount(filepath.Join(config.MPDUSBSubfolder, label)); err != nil {
 		return "", fmt.Errorf("failed to unmount %s: %w", device.Devnode(), err)
 	}
-	return filepath.Join(config.MPDLibraryFolder, label), nil
+	return filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder, label), nil
 }
 
 func clearMounts(client *mpdplayer.ReconnectingMPDClient) error {

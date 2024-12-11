@@ -274,16 +274,13 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 func checkMountsOrUnmount(client *mpd.Client, mounts []mpd.Attrs) error {
 	var errors []error
 	for _, v := range mounts {
-		if err := checkMount(client, v["storage"], v["mount"]); err == nil {
-			continue
-		}
-		if err := unmount(client, v["mount"]); err != nil {
+		if err := checkMountOrUnmount(client, v["storage"], v["mount"]); err != nil {
 			errors = append(errors, fmt.Errorf("Failed to unmount %s: %w", v["mount"], err))
 		}
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf("errors encountered while clearing mounts : %v", errors)
+		return fmt.Errorf("errors encountered while clearing mounts: %v", errors)
 	}
 	return nil
 }
@@ -294,6 +291,16 @@ func checkMount(client *mpd.Client, storage, mount string) error {
 	}
 	if err := findNeighbor(client, storage); err != nil {
 		return fmt.Errorf("%s mount does not exists: %w", mount, err)
+	}
+	return nil
+}
+
+func checkMountOrUnmount(client *mpd.Client, storage, mount string) error {
+	if err := checkMount(client, storage, mount); err == nil {
+		return nil
+	}
+	if err := unmount(client, mount); err != nil {
+		return fmt.Errorf("Failed to unmount %s: %w", mount, err)
 	}
 	return nil
 }

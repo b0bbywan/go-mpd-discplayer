@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jochenvg/go-udev"
@@ -25,8 +24,7 @@ var (
 )
 
 type MountManager struct {
-	mountPoints map[string]string
-	mu          sync.RWMutex
+	mountPoints *protectedCache
 	mounter     Mounter
 }
 
@@ -45,7 +43,7 @@ func NewMountManager(client *mpdplayer.ReconnectingMPDClient) (*MountManager, er
 		return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
 	}
 	m := &MountManager{
-		mountPoints: make(map[string]string),
+		mountPoints: newCache(),
 		mounter:     mounter,
 	}
 	populateMountPointCache(m)
@@ -60,32 +58,8 @@ func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 	return m.FindRelPath(device, m.SeekMountPointAndClearCache)
 }
 
-// Add a device-to-mount-point association
-func (m *MountManager) AddCache(device, mountPoint string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.mountPoints[device] = mountPoint
-}
-
-// Remove a device's mount point association
-func (m *MountManager) RemoveCache(device string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.mountPoints, device)
-}
-
-// Retrieve a device's mount point
-func (m *MountManager) GetCache(device string) (string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if mountPoint, exists := m.mountPoints[device]; exists {
-		return mountPoint, nil
-	}
-	return "", fmt.Errorf("%s mount point does not exist in cache", device)
-}
-
 func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string, error) {
-	defer m.RemoveCache(device.Devnode())
+	defer m.mountPoints.RemoveCache(device.Devnode())
 	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
 	if err != nil {
 		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
@@ -118,7 +92,7 @@ func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
-	m.AddCache(device.Devnode(), mountPoint)
+	m.mountPoints.AddCache(device.Devnode(), mountPoint)
 	validatedPath, err := m.mounter.validate(device, mountPoint)
 	if err != nil {
 		return "", fmt.Errorf("mounter validation failed: %w", err)
@@ -132,7 +106,7 @@ func (m *MountManager) findMountPointWithRetry(device string, timeout, interval 
 	timeoutChan := time.After(timeout)
 	for {
 		if mountPoint, err := seekMountPoint(device); err == nil {
-			m.AddCache(device, mountPoint)
+			m.mountPoints.AddCache(device, mountPoint)
 			return mountPoint, nil
 		}
 		select {
@@ -148,7 +122,7 @@ func (m *MountManager) seekMountPointWithCacheFallback(device string) (string, e
 	if mountPoint, err := seekMountPoint(device); err == nil {
 		return mountPoint, nil
 	}
-	if path, err := m.GetCache(device); err == nil {
+	if path, err := m.mountPoints.GetCache(device); err == nil {
 		return path, nil
 	}
 	return "", fmt.Errorf("Failed to find %s in mount file and cache", device)
@@ -195,7 +169,7 @@ func seekMountPoint(device string) (string, error) {
 func populateMountPointCache(m *MountManager) {
 	if err := readMountsFile(func(device, mountPoint string) {
 		if isRemovableNode(device, mountPoint) {
-			m.AddCache(device, mountPoint)
+			m.mountPoints.AddCache(device, mountPoint)
 		}
 	}); err != nil {
 		log.Printf("Failed to populate mount point cache: %v", err)

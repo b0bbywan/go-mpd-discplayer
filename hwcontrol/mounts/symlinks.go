@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/jochenvg/go-udev"
 
@@ -14,37 +13,15 @@ import (
 )
 
 type SymlinkFinder struct {
-	symLinkCache map[string]string
-	mu           sync.RWMutex // Protects access to cache
+	symlinkCache *protectedCache
 }
 
 func newSymlinkFinder() *SymlinkFinder {
 	s := &SymlinkFinder{
-		symLinkCache: make(map[string]string),
+		symlinkCache: newCache(),
 	}
 	populateSymlinkCache(s)
 	return s
-}
-
-func (s *SymlinkFinder) AddCache(source, target string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.symLinkCache[source] = target
-}
-
-func (s *SymlinkFinder) RemoveCache(source string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.symLinkCache, source)
-}
-
-func (s *SymlinkFinder) GetCache(source string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if symLink, exists := s.symLinkCache[source]; exists {
-		return symLink, nil
-	}
-	return "", fmt.Errorf("%s mount point does not exist in cache", source)
 }
 
 func (s *SymlinkFinder) validate(device *udev.Device, mountpoint string) (string, error) {
@@ -66,13 +43,13 @@ func (s *SymlinkFinder) createSymlink(device *udev.Device, mountpoint, target st
 	if err := os.Symlink(mountpoint, target); err != nil {
 		return "", fmt.Errorf("Error creating symlink from %s to %s: %w", mountpoint, target, err)
 	}
-	s.AddCache(device.Devnode(), target)
+	s.symlinkCache.AddCache(device.Devnode(), target)
 	return target, nil
 }
 
 func (s *SymlinkFinder) clearSymlinkCache(device *udev.Device, mountpoint string) (string, error) {
 	devnode := device.Devnode()
-	path, err := s.GetCache(devnode)
+	path, err := s.symlinkCache.GetCache(devnode)
 	if err != nil {
 		return "", fmt.Errorf("Unknown device %s", devnode)
 	}
@@ -85,7 +62,7 @@ func (s *SymlinkFinder) clearSymlinkCache(device *udev.Device, mountpoint string
 		return "", fmt.Errorf("Failed to remove symlink %s: %w", path, err)
 	}
 	log.Printf("Successfully cleared %s cache", path)
-	s.RemoveCache(devnode)
+	s.symlinkCache.RemoveCache(devnode)
 	return path, nil
 }
 
@@ -170,7 +147,7 @@ func populateSymlinkCache(s *SymlinkFinder) {
 				return fmt.Errorf("Failed to remove symlink %s: %w", path, err)
 			}
 		}
-		s.AddCache(device, trimmedPath)
+		s.symlinkCache.AddCache(device, trimmedPath)
 		return nil
 	}
 

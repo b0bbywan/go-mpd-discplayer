@@ -1,7 +1,6 @@
 package mounts
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -14,14 +13,12 @@ import (
 )
 
 type FuseFinder struct {
-	ctx        context.Context
 	fuseMounts map[string]*fuse.Server
 	mu         sync.RWMutex // Protects access to mounts
 }
 
-func newFuseFinder(ctx context.Context) *FuseFinder {
+func newFuseFinder() *FuseFinder {
 	return &FuseFinder{
-		ctx:        ctx,
 		fuseMounts: make(map[string]*fuse.Server),
 	}
 }
@@ -114,5 +111,5 @@ func (f *FuseFinder) clearFuseMount(device *udev.Device, target string) (string,
 
 func WaitContext(server *fuse.Server) {
 	server.Wait()
-	log.Printf("Unmounted FUSE mount for %s", target)
+	log.Printf("Unmounted FUSE mount")
 }

@@ -1,7 +1,6 @@
 package mounts
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -26,7 +25,6 @@ var (
 )
 
 type MountManager struct {
-	ctx         context.Context
 	mountPoints map[string]string
 	mu          sync.RWMutex
 	mounter     Mounter
@@ -37,32 +35,31 @@ type Mounter interface {
 	clear(device *udev.Device, target string) (string, error)
 }
 
+func NewMountManager(client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
+	var mounter Mounter
+
+	switch config.MountConfig {
+	case "fuse":
+		mounter = newFuseFinder()
+	case "symlink":
+		mounter = newSymlinkFinder()
+	default:
+		return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
+	}
+	m := &MountManager{
+		mountPoints: make(map[string]string),
+		mounter:     mounter,
+	}
+	populateMountPointCache(m)
+	return m, nil
+}
+
 func (m *MountManager) Mount(device *udev.Device) (string, error) {
 	return m.FindRelPath(device, m.FindDevicePathAndCache)
 }
 
 func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 	return m.FindRelPath(device, m.SeekMountPointAndClearCache)
-}
-
-func NewMountManager(ctx context.Context, client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
-	var mounter Mounter
-
-	switch config.MountConfig {
-	case "fuse":
-		mounter = newFuseFinder(ctx)
-	case "symlink":
-		mounter = newSymlinkFinder(ctx)
-	default:
-		return nil, fmt.Errorf("unsupported mount type: %s", config.MountConfig)
-	}
-	m := &MountManager{
-		ctx:         ctx,
-		mountPoints: make(map[string]string),
-		mounter:     mounter,
-	}
-	populateMountPointCache(m)
-	return m, nil
 }
 
 // Add a device-to-mount-point association

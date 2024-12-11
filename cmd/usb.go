@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -14,9 +13,9 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newUSBHandlers(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
+func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
 	handlers := hwcontrol.NewBasicUSBHandlers()
-	mounter, err := mounts.NewMountManager(ctx, mpdClient)
+	mounter, err := mounts.NewMountManager(mpdClient)
 	if err != nil {
 		log.Printf("Failed to create mounter: %v\nUSB Playback disabled", err)
 		return nil

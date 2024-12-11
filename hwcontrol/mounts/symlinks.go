@@ -1,7 +1,6 @@
 package mounts
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -15,14 +14,12 @@ import (
 )
 
 type SymlinkFinder struct {
-	ctx          context.Context
 	symLinkCache map[string]string
 	mu           sync.RWMutex // Protects access to cache
 }
 
-func newSymlinkFinder(ctx context.Context) *SymlinkFinder {
+func newSymlinkFinder() *SymlinkFinder {
 	s := &SymlinkFinder{
-		ctx:          ctx,
 		symLinkCache: make(map[string]string),
 	}
 	populateSymlinkCache(s)

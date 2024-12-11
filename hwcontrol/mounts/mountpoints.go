@@ -73,7 +73,7 @@ func (m *MountManager) FindRelPath(mountPoint string) (string, error) {
 func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string, error) {
 	defer m.mountPoints.RemoveCache(device.Devnode())
 	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
-	if err != nil {
+	if err != nil && config.MountConfig != "mpd" {
 		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
 	}
 
@@ -90,7 +90,7 @@ func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string,
 
 func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, error) {
 	mountPoint, err := m.findMountPointWithRetry(device.Devnode(), RetryTimeout, RetryInterval)
-	if err != nil {
+	if err != nil && config.MountConfig != "mpd" {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
 	m.mountPoints.AddCache(device.Devnode(), mountPoint)
@@ -140,6 +140,8 @@ func newMounter(client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
 	switch config.MountConfig {
 	case "symlink":
 		return newSymlinkFinder(), nil
+	case "mpd":
+		return newMpdFinder(client), nil
 	default:
 		return nil, fmt.Errorf("Unsupported mount type: %s", config.MountConfig)
 	}

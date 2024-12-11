@@ -49,7 +49,7 @@ func init() {
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
-	viper.SetDefault("MountConfig", "symlink")
+	viper.SetDefault("MountConfig", "mpd")
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                       // name of config file (without extension)

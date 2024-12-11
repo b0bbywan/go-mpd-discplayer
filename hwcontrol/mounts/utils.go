@@ -45,10 +45,11 @@ func validateAndPreparePath(device *udev.Device, mountpoint string, callback fun
 	}
 
 	target := generateTarget(mountpoint)
-	if _, err := callback(device, mountpoint, target); err != nil {
+	realTarget, err := callback(device, mountpoint, target)
+	if err != nil {
 		return "", fmt.Errorf("Failed to create bind on %s for %s: %w", target, mountpoint, err)
 	}
-	return target, nil
+	return realTarget, nil
 }
 
 func generateTarget(source string) string {

@@ -25,8 +25,8 @@ func newSymlinkFinder() *SymlinkFinder {
 	return s
 }
 
-func (s *SymlinkFinder) validate(device *udev.Device, mountpoint string) (string, error) {
-	return validateAndPreparePath(device, mountpoint, s.createSymlink)
+func (s *SymlinkFinder) validate(device *udev.Device, mountpoint, target string) (string, error) {
+	return s.createSymlink(device, mountpoint, target)
 }
 
 func (s *SymlinkFinder) clear(device *udev.Device, mountpoint string) (string, error) {

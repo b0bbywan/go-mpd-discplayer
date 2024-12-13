@@ -25,9 +25,8 @@ func newMpdFinder(client *mpdplayer.ReconnectingMPDClient) *mpdFinder {
 	}
 }
 
-func (m *mpdFinder) validate(device *udev.Device, mountpoint string) (string, error) {
-	return validateAndPreparePath(device, mountpoint, m.mount)
-
+func (m *mpdFinder) validate(device *udev.Device, mountpoint, target string) (string, error) {
+	return m.mount(device, mountpoint, target)
 }
 
 func (m *mpdFinder) clear(device *udev.Device, mountpoint string) (string, error) {

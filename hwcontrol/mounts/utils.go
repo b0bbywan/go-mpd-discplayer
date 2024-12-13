@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jochenvg/go-udev"
-
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
@@ -37,19 +35,6 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 		return fmt.Errorf("error reading %s: %w", mountFile, err)
 	}
 	return nil
-}
-
-func validateAndPreparePath(device *udev.Device, mountpoint string, callback func(*udev.Device, string, string) (string, error)) (string, error) {
-	if strings.HasPrefix(mountpoint, config.MPDLibraryFolder) {
-		return mountpoint, nil // Already valid
-	}
-
-	target := generateTarget(mountpoint)
-	realTarget, err := callback(device, mountpoint, target)
-	if err != nil {
-		return "", fmt.Errorf("Failed to create bind on %s for %s: %w", target, mountpoint, err)
-	}
-	return realTarget, nil
 }
 
 func generateTarget(source string) string {

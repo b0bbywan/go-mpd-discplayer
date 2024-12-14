@@ -2,7 +2,6 @@ package mounts
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 
 	"github.com/jochenvg/go-udev"
@@ -15,14 +14,13 @@ type mpdFinder struct {
 	client *mpdplayer.ReconnectingMPDClient
 }
 
-func newMpdFinder(client *mpdplayer.ReconnectingMPDClient) *mpdFinder {
+func newMpdFinder(client *mpdplayer.ReconnectingMPDClient) (*mpdFinder, error) {
 	if err := clearMounts(client); err != nil {
-		log.Printf("Error encountered while starting mpd mounter: %w\nUSB playback disabled\n", err)
-		return nil
+		return nil, err
 	}
 	return &mpdFinder{
 		client: client,
-	}
+	}, nil
 }
 
 func (m *mpdFinder) validate(device *udev.Device, mountpoint, target string) (string, error) {

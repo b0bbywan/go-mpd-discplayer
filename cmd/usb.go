@@ -17,7 +17,7 @@ func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClie
 	handlers := hwcontrol.NewBasicUSBHandlers()
 	mounter, err := mounts.NewMountManager(mpdClient)
 	if err != nil {
-		log.Printf("Failed to create mounter: %v\nUSB Playback disabled", err)
+		log.Printf("USB Playback disabled: Failed to create mount manager: %v\n", err)
 		return nil
 	}
 	startUSBPlayback := func(device *udev.Device) error {

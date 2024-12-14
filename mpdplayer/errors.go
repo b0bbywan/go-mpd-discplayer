@@ -1,10 +1,12 @@
 package mpdplayer
 
 import (
+	"log"
 	"strings"
 )
 
 func isConnError(err error) bool {
+	log.Printf("%s", err.Error())
 	if err == nil {
 		return false
 	}

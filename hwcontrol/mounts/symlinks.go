@@ -136,7 +136,7 @@ func populateSymlinkCache(s *SymlinkFinder) {
 		if err != nil {
 			return fmt.Errorf("path Error for %s: %w", path, err)
 		}
-		if info.Name() == config.MPDUSBSubfolder {
+		if path == config.MPDLibraryFolder || info.Name() == config.MPDUSBSubfolder {
 			return nil
 		}
 

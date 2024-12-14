@@ -2,7 +2,6 @@ package mounts
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 
 	"github.com/jochenvg/go-udev"
@@ -15,14 +14,13 @@ type mpdFinder struct {
 	client *mpdplayer.ReconnectingMPDClient
 }
 
-func newMpdFinder(client *mpdplayer.ReconnectingMPDClient) *mpdFinder {
-	if err := clearMounts(client); err != nil {
-		log.Printf("Error encountered while starting mpd mounter: %w\nUSB playback disabled\n", err)
-		return nil
+func newMpdFinder(client *mpdplayer.ReconnectingMPDClient) (*mpdFinder, error) {
+	if err := client.ClearMounts(); err != nil {
+		return nil, fmt.Errorf("Failed to clear mounts: %w", err)
 	}
 	return &mpdFinder{
 		client: client,
-	}
+	}, nil
 }
 
 func (m *mpdFinder) validate(device *udev.Device, mountpoint, target string) (string, error) {
@@ -45,14 +43,7 @@ func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (strin
 func (m *mpdFinder) unmount(device *udev.Device) (string, error) {
 	label := device.PropertyValue("ID_FS_LABEL")
 	if err := m.client.Unmount(label); err != nil {
-		return "", fmt.Errorf("failed to unmount %s: %w", device.Devnode(), err)
+		return "", fmt.Errorf("Failed to unmount %s: %w", device.Devnode(), err)
 	}
 	return filepath.Join(config.MPDLibraryFolder, label), nil
-}
-
-func clearMounts(client *mpdplayer.ReconnectingMPDClient) error {
-	if err := client.ClearMounts(); err != nil {
-		return fmt.Errorf("Failed to clear MPD mounts: %w", err)
-	}
-	return nil
 }

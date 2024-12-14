@@ -135,7 +135,7 @@ func newMounter(client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
 	case "symlink":
 		return newSymlinkFinder(), nil
 	case "mpd":
-		return newMpdFinder(client), nil
+		return newMpdFinder(client)
 	default:
 		return nil, fmt.Errorf("Unsupported mount type: %s", config.MountConfig)
 	}

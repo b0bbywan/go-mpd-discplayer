@@ -95,7 +95,7 @@ func checkSymlink(mountpoint, path string) error {
 func checkSymlinkPopulation(path string, info os.FileInfo) (string, error) {
 	symlinkTarget, err := validateSymlink(path, info)
 	if err != nil {
-		return "", fmt.Errorf("Invalid symlink %s: %w", path, err)
+		return "", nil
 	}
 	device, err := isSymlinkMountpoint(symlinkTarget)
 	if err != nil {

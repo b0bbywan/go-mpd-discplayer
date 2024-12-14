@@ -56,10 +56,10 @@ func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
 func (rc *ReconnectingMPDClient) Mount(neighbor, label string) error {
 	neighborDiskId := fmt.Sprintf("udisks://by-uuid-%s", neighbor)
 	return rc.execute(func(client *mpd.Client) error {
-		if err := findNeighbor(rc.client, neighborDiskId); err != nil {
+		if err := findNeighbor(client, neighborDiskId); err != nil {
 			return fmt.Errorf("Failed to find %s in neighbors list: %w", neighbor, err)
 		}
-		if err := mount(rc.client, neighborDiskId, label); err != nil {
+		if err := mount(client, neighborDiskId, label); err != nil {
 			return fmt.Errorf("Failed to mount %s -> %s: %w", neighbor, label, err)
 		}
 		return nil
@@ -68,7 +68,7 @@ func (rc *ReconnectingMPDClient) Mount(neighbor, label string) error {
 
 func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if err := unmount(rc.client, label); err != nil {
+		if err := unmount(client, label); err != nil {
 			return fmt.Errorf("Failed to unmount %s: %w", label, err)
 		}
 		return nil
@@ -77,7 +77,7 @@ func (rc *ReconnectingMPDClient) Unmount(label string) error {
 
 func (rc *ReconnectingMPDClient) ClearMounts() error {
 	return rc.execute(func(client *mpd.Client) error {
-		mounts, err := listMounts(rc.client)
+		mounts, err := listMounts(client)
 		if err != nil {
 			return fmt.Errorf("Failed to list mounts: %w", err)
 		}
@@ -250,32 +250,22 @@ func findNeighbor(client *mpd.Client, neighbor string) error {
 }
 
 func mount(client *mpd.Client, neighbor, label string) error {
-	if err := client.Command("mount %s %s", label, neighbor).OK(); err != nil {
-		return fmt.Errorf("Mount %s -> %s failed: %w", neighbor, label, err)
-	}
-	return nil
+	return client.Command("mount %s %s", label, neighbor).OK()
 }
 
 func unmount(client *mpd.Client, label string) error {
-	if err := client.Command("unmount %s", label).OK(); err != nil {
-		return fmt.Errorf("Unmount %s failed: %w", label, err)
-	}
-	return nil
+	return client.Command("unmount %s", label).OK()
 }
 
 func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
-	res, err := client.Command("listmounts").AttrsList("mount")
-	if err != nil {
-		return nil, fmt.Errorf("Failed to list MPD mounts: %w", err)
-	}
-	return res, nil
+	return client.Command("listmounts").AttrsList("mount")
 }
 
 func checkMountsOrUnmount(client *mpd.Client, mounts []mpd.Attrs) error {
 	var errors []error
 	for _, v := range mounts {
 		if err := checkMountOrUnmount(client, v["storage"], v["mount"]); err != nil {
-			errors = append(errors, fmt.Errorf("Failed to unmount %s: %w", v["mount"], err))
+			errors = append(errors, err)
 		}
 	}
 
@@ -289,18 +279,12 @@ func checkMount(client *mpd.Client, storage, mount string) error {
 	if mount == "" {
 		return nil
 	}
-	if err := findNeighbor(client, storage); err != nil {
-		return fmt.Errorf("%s mount does not exists: %w", mount, err)
-	}
-	return nil
+	return findNeighbor(client, storage)
 }
 
 func checkMountOrUnmount(client *mpd.Client, storage, mount string) error {
-	if err := checkMount(client, storage, mount); err == nil {
-		return nil
-	}
-	if err := unmount(client, mount); err != nil {
-		return fmt.Errorf("Failed to unmount %s: %w", mount, err)
+	if err := checkMount(client, storage, mount); err != nil {
+		return unmount(client, mount)
 	}
 	return nil
 }

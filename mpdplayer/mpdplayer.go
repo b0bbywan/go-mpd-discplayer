@@ -99,11 +99,11 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 			rc.client = client
 			return nil
 		}
-		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 		// Calculate wait time with exponential backoff, capped by reconnectWait
+		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 		log.Printf("Retrying connection in %s: %w", waitTime, err)
-		// Wait for the exponential backoff period, checking context for cancellation
 
+		// Wait for the exponential backoff period, checking context for cancellation
 		select {
 		case <-rc.ctx.Done():
 			log.Println("Reconnection attempt canceled by context.")
@@ -111,7 +111,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		case <-time.After(waitTime): // Sleep for the calculated retry interval
 		}
 	}
-	return fmt.Errorf("failed to connect to MPD server after %s: %w", rc.mpcConfig.ReconnectWait, err)
+	return fmt.Errorf("failed to connect to MPD server %s://%s after %s: %w", rc.mpcConfig.Type, rc.mpcConfig.Address, rc.mpcConfig.ReconnectWait, err)
 }
 
 func reconnectingWaitTime(retries int, reconnectWait time.Duration, start time.Time) time.Duration {

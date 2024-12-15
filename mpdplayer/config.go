@@ -12,26 +12,20 @@ type MPDConn struct {
 	Address       string // socket path or TCP address
 	ReconnectWait time.Duration
 	CuerConfig    *config.Config
-	DiscSpeed     int
 }
 
-func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cuerConfig *config.Config, discSpeed int) (*MPDConn, error) {
+func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cuerConfig *config.Config) (*MPDConn, error) {
 	conn := &MPDConn{
 		Type:          connectionType,
 		Address:       address,
 		ReconnectWait: reconnectWait,
 		CuerConfig:    cuerConfig,
-		DiscSpeed:     discSpeed,
 	}
 
 	if err := validateMPDConnection(conn); err != nil {
 		return nil, fmt.Errorf("Failed to create valid MPD Config")
 	}
 	return conn, nil
-}
-
-func (rc *ReconnectingMPDClient) GetDiscSpeed() int {
-	return rc.mpcConfig.DiscSpeed
 }
 
 // validateMPDConnection checks the validity of the MPD connection settings

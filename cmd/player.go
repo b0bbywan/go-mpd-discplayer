@@ -1,6 +1,7 @@
-package config
+package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -21,23 +22,22 @@ const (
 	AppVersion = "0.4"
 )
 
-type PlayerConfig struct {
-	MPDConnection      *mpdplayer.MPDConn
-	NotificationConfig *notifications.NotificationConfig
-	MountConfig        *mounts.MountConfig
-	MPDLibraryFolder   string
-	TargetDevice       string
-	DiscSpeed          int
-	CuerCacheLocation  string
+type Player struct {
+	ctx       context.Context
+	cancel    context.CancelFunc
+	discSpeed int
+	Client    *mpdplayer.ReconnectingMPDClient
+	Notifier  *notifications.Notifier
+	Mounter   *mounts.MountManager
 }
 
-func NewPlayerConfig() (*PlayerConfig, error) {
+func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
 	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
 	viper.SetDefault("MPDCueSubfolder", ".disc-cuer")
-	viper.SetDefault("MPDUSBSubfolder", ".")
+	viper.SetDefault("MPDUSBSubfolder", ".udisks")
 	viper.SetDefault("DiscSpeed", 12)
 	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
 	viper.SetDefault("AudioBackend", "pulse")
@@ -78,29 +78,60 @@ func NewPlayerConfig() (*PlayerConfig, error) {
 		viper.GetString("MPDConnection.Address"),
 		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
 		cuerConfig,
-		viper.GetInt("DiscSpeed"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
 	}
+	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, mpdConnection)
 
 	mountConfig := mounts.NewMountConfig(
 		viper.GetString("MPDLibraryFolder"),
 		viper.GetString("MPDUSBSubfolder"),
 		viper.GetString("MountConfig"),
 	)
+	mounter, err := mounts.NewMountManager(mountConfig, mpdClient)
+	if err != nil {
+		return nil, fmt.Errorf("USB Playback disabled: Failed to create mount manager: %w", err)
+	}
 
 	notificationConfig := notifications.NewNotificationConfig(
 		viper.GetString("AudioBackend"),
 		viper.GetString("PulseServer"),
 		viper.GetString("SoundsLocation"),
 	)
+	notifier := notifications.NewNotifier(notificationConfig)
 
-	return &PlayerConfig{
-		NotificationConfig: notificationConfig,
-		MPDConnection:      mpdConnection,
-		MountConfig:        mountConfig,
-		MPDLibraryFolder:   viper.GetString("MPDLibraryFolder"),
-		CuerCacheLocation:  cuerCacheLocation,
+	return &Player{
+		ctx:       ctx,
+		cancel:    cancel,
+		discSpeed: viper.GetInt("DiscSpeed"),
+		Client:    mpdClient,
+		Notifier:  notifier,
+		Mounter:   mounter,
 	}, nil
+}
+
+func (p *Player) Ctx() context.Context {
+	return p.ctx
+}
+
+func (p *Player) Cancel() {
+	p.cancel()
+}
+
+func (p *Player) Close() {
+	log.Println("Player closing")
+	p.cancel()
+	log.Println("Player cancel called")
+	if p.Client != nil {
+		p.Client.Disconnect()
+	}
+	if p.Notifier != nil {
+		p.Notifier.Close()
+	}
+	log.Println("Player Closed")
+}
+
+func (p *Player) GetDiscSpeed() int {
+	return p.discSpeed
 }

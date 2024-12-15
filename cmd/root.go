@@ -7,10 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
-	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
-	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
 const (
@@ -19,15 +16,15 @@ const (
 )
 
 // executeAction handles the main logic for each action (add or remove).
-func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action string) error {
+func ExecuteAction(player *Player, device, action string) error {
 	switch action {
 	case ActionPlay:
-		if err := mpdClient.StartDiscPlayback(device); err != nil {
+		if err := player.Client.StartDiscPlayback(device); err != nil {
 			return fmt.Errorf("Error adding tracks: %w", err)
 		}
 		return nil
 	case ActionStop:
-		if err := mpdClient.StopDiscPlayback(); err != nil {
+		if err := player.Client.StopDiscPlayback(); err != nil {
 			return fmt.Errorf("Error adding tracks: %w", err)
 		}
 		return nil
@@ -38,21 +35,19 @@ func ExecuteAction(mpdClient *mpdplayer.ReconnectingMPDClient, device, action st
 	return nil
 }
 
-func Run(wg *sync.WaitGroup, ctx context.Context, mpdClient *mpdplayer.ReconnectingMPDClient, config *config.PlayerConfig) error {
-	notifier := notifications.NewNotifier(config.NotificationConfig)
-	defer closeNotifier(notifier)
+func Run(wg *sync.WaitGroup, player *Player) error {
 	var handlers []*hwcontrol.EventHandler
 	// Create event handlers (subscribers) passing the context
-	handlers = append(handlers, newDiscHandlers(wg, mpdClient, notifier)...)
-	handlers = append(handlers, newUSBHandlers(wg, mpdClient, config.MountConfig, notifier)...)
+	handlers = append(handlers, newDiscHandlers(wg, player)...)
+	handlers = append(handlers, newUSBHandlers(wg, player)...)
 	for _, handler := range handlers {
-		handler.StartSubscriber(wg, ctx) // Use the passed context
+		handler.StartSubscriber(wg, player.Ctx()) // Use the passed context
 	}
 
 	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
-	go loop(wg, ctx, handlers)
-	<-ctx.Done()
+	go loop(wg, player.Ctx(), handlers)
+	<-player.Ctx().Done()
 	return nil
 }
 
@@ -70,11 +65,5 @@ func loop(wg *sync.WaitGroup, ctx context.Context, handlers []*hwcontrol.EventHa
 				continue
 			}
 		}
-	}
-}
-
-func closeNotifier(notifier *notifications.Notifier) {
-	if notifier != nil {
-		notifier.Close()
 	}
 }

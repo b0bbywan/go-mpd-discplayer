@@ -8,26 +8,25 @@ import (
 	"github.com/jochenvg/go-udev"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
-	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
+func newDiscHandlers(wg *sync.WaitGroup, player *Player) []*hwcontrol.EventHandler {
 	// Use VeryNewBasicDiscHandler to create the event handlers
 	handlers := hwcontrol.NewBasicDiscHandlers()
 
 	startDiscPlayback := func(device *udev.Device) error {
-		if err := hwcontrol.SetDiscSpeed(device.Devnode(), mpdClient.GetDiscSpeed()); err != nil {
+		if err := hwcontrol.SetDiscSpeed(device.Devnode(), player.GetDiscSpeed()); err != nil {
 			log.Printf("[%s] Error setting disc speed on %s: %v", handlers[0].Name(), device.Devnode(), err)
 		}
-		if err := mpdClient.StartDiscPlayback(device.Devnode()); err != nil {
+		if err := player.Client.StartDiscPlayback(device.Devnode()); err != nil {
 			return fmt.Errorf("[%s] Error starting %s playback: %w", handlers[0].Name(), device.Devnode(), err)
 		}
 		return nil
 	}
 
 	stopDiscPlayback := func(device *udev.Device) error {
-		if err := mpdClient.StopDiscPlayback(); err != nil {
+		if err := player.Client.StopDiscPlayback(); err != nil {
 			return fmt.Errorf("[%s] Error stopping %s playback: %w", handlers[0].Name(), device.Devnode(), err)
 		}
 		return nil
@@ -38,7 +37,7 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 		wg,
 		fmt.Sprintf("[%s] Starting Disc Playback", handlers[0].Name()),
 		startDiscPlayback,
-		notifier,
+		player.Notifier,
 		notifications.EventAdd,
 	)
 
@@ -47,7 +46,7 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 		wg,
 		fmt.Sprintf("[%s] Stopping Disc Playback", handlers[1].Name()),
 		stopDiscPlayback,
-		notifier,
+		player.Notifier,
 		notifications.EventRemove,
 	)
 

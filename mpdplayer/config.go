@@ -1,0 +1,46 @@
+package mpdplayer
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/b0bbywan/go-disc-cuer/config"
+)
+
+type MPDConn struct {
+	Type          string // "unix" or "tcp"
+	Address       string // socket path or TCP address
+	ReconnectWait time.Duration
+	CuerConfig    *config.Config
+	DiscSpeed     int
+}
+
+func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cuerConfig *config.Config, discSpeed int) (*MPDConn, error) {
+	conn := &MPDConn{
+		Type:          connectionType,
+		Address:       address,
+		ReconnectWait: reconnectWait,
+		CuerConfig:    cuerConfig,
+		DiscSpeed:     discSpeed,
+	}
+
+	if err := validateMPDConnection(conn); err != nil {
+		return nil, fmt.Errorf("Failed to create valid MPD Config")
+	}
+	return conn, nil
+}
+
+func (rc *ReconnectingMPDClient) GetDiscSpeed() int {
+	return rc.mpcConfig.DiscSpeed
+}
+
+// validateMPDConnection checks the validity of the MPD connection settings
+func validateMPDConnection(conn *MPDConn) error {
+	if conn.Type != "unix" && conn.Type != "tcp" {
+		return fmt.Errorf("invalid MPDConnection.Type: %s, must be 'unix' or 'tcp'", conn.Type)
+	}
+	if conn.Address == "" {
+		return fmt.Errorf("MPDConnection.Address cannot be empty")
+	}
+	return nil
+}

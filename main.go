@@ -31,7 +31,11 @@ func main() {
 	// Initialize context and WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, config.MPDConnection)
+	cfg, err := config.NewPlayerConfig()
+	if err != nil {
+		log.Fatalf("Failed to init config: %v", err)
+	}
+	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, cfg.MPDConnection)
 
 	var wg sync.WaitGroup
 	defer cleanUp(&wg, ctx, mpdClient)
@@ -55,7 +59,7 @@ func main() {
 	}
 
 	// Default behavior
-	if err := cmd.Run(&wg, ctx, mpdClient); err != nil {
+	if err := cmd.Run(&wg, ctx, mpdClient, cfg); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 }

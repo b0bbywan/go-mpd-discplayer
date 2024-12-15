@@ -8,8 +8,8 @@ import (
 
 	"github.com/fhs/gompd/v2/mpd"
 
+	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 const CDDAPathPrefix = "cdda://"
@@ -17,7 +17,7 @@ const CDDAPathPrefix = "cdda://"
 type PlaybackAction func(client *mpd.Client, device string) error
 
 func (rc *ReconnectingMPDClient) StartDiscPlayback(device string) error {
-	return rc.startPlayback(attemptToLoadCD, device)
+	return rc.startPlayback(rc.attemptToLoadCD, device)
 }
 
 func (rc *ReconnectingMPDClient) StartUSBPlayback(device string) error {
@@ -91,9 +91,9 @@ func (rc *ReconnectingMPDClient) ClearMounts() error {
 
 // attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
 // If loading the CUE file fails, it falls back to loading individual CDDA tracks,
-func attemptToLoadCD(client *mpd.Client, device string) error {
+func (rc *ReconnectingMPDClient) attemptToLoadCD(client *mpd.Client, device string) error {
 	var err error
-	if err = loadCue(client, device); err == nil {
+	if err = loadCue(client, rc.mpcConfig.CuerConfig, device); err == nil {
 		return nil
 	}
 
@@ -124,8 +124,11 @@ func loadCDDATracks(client *mpd.Client, device string) error {
 	return addTracks(client, trackCount)
 }
 
-func loadCue(client *mpd.Client, device string) error {
-	cueFilePath, err := cue.GenerateDefaultFromDisc(device, config.CuerConfig)
+func loadCue(client *mpd.Client, cuerConfig *config.Config, device string) error {
+	if cuerConfig == nil {
+		return fmt.Errorf("No Cuer config to generate from")
+	}
+	cueFilePath, err := cue.GenerateDefaultFromDisc(device, cuerConfig)
 	if err != nil || cueFilePath == "" {
 		return fmt.Errorf("failed to generate CUE file: %w", err)
 	}

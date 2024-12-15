@@ -7,7 +7,6 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
@@ -18,7 +17,7 @@ func newDiscHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDCli
 	handlers := hwcontrol.NewBasicDiscHandlers()
 
 	startDiscPlayback := func(device *udev.Device) error {
-		if err := hwcontrol.SetDiscSpeed(device.Devnode(), config.DiscSpeed); err != nil {
+		if err := hwcontrol.SetDiscSpeed(device.Devnode(), mpdClient.GetDiscSpeed()); err != nil {
 			log.Printf("[%s] Error setting disc speed on %s: %v", handlers[0].Name(), device.Devnode(), err)
 		}
 		if err := mpdClient.StartDiscPlayback(device.Devnode()); err != nil {

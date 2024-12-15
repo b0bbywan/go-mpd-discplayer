@@ -13,9 +13,9 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
+func newUSBHandlers(wg *sync.WaitGroup, mpdClient *mpdplayer.ReconnectingMPDClient, config *mounts.MountConfig, notifier *notifications.Notifier) []*hwcontrol.EventHandler {
 	handlers := hwcontrol.NewBasicUSBHandlers()
-	mounter, err := mounts.NewMountManager(mpdClient)
+	mounter, err := mounts.NewMountManager(config, mpdClient)
 	if err != nil {
 		log.Printf("USB Playback disabled: Failed to create mount manager: %v\n", err)
 		return nil

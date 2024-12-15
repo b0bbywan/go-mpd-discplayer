@@ -9,7 +9,6 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -18,7 +17,14 @@ const (
 	RetryInterval = 300 * time.Millisecond
 )
 
+type MountConfig struct {
+	MPDLibraryFolder string
+	MPDUSBSubFolder  string
+	Method           string
+}
+
 type MountManager struct {
+	config      *MountConfig
 	mountPoints *protectedCache
 	mounter     Mounter
 }
@@ -28,8 +34,16 @@ type Mounter interface {
 	clear(device *udev.Device, target string) (string, error)
 }
 
-func NewMountManager(client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
-	mounter, err := newMounter(client)
+func NewMountConfig(base, sub, method string) *MountConfig {
+	return &MountConfig{
+		MPDLibraryFolder: base,
+		MPDUSBSubFolder:  sub,
+		Method:           method,
+	}
+}
+
+func NewMountManager(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
+	mounter, err := newMounter(config, client)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create Mounter: %w", err)
 	}
@@ -58,7 +72,7 @@ func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 }
 
 func (m *MountManager) FindRelPath(mountPoint string) (string, error) {
-	relPath, err := filepath.Rel(config.MPDLibraryFolder, mountPoint)
+	relPath, err := filepath.Rel(m.config.MPDLibraryFolder, mountPoint)
 	if err != nil {
 		return "", fmt.Errorf("Found mountpoint %s not in MPDLibraryFolder: %w", mountPoint, err)
 	}
@@ -68,11 +82,11 @@ func (m *MountManager) FindRelPath(mountPoint string) (string, error) {
 func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string, error) {
 	defer m.mountPoints.RemoveCache(device.Devnode())
 	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
-	if err != nil && config.MountConfig != "mpd" {
+	if err != nil && m.config.Method != "mpd" {
 		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
 	}
 
-	if strings.HasPrefix(mountPoint, config.MPDLibraryFolder) {
+	if strings.HasPrefix(mountPoint, m.config.MPDLibraryFolder) {
 		return mountPoint, nil
 	}
 
@@ -84,16 +98,16 @@ func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string,
 
 func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, error) {
 	mountPoint, err := m.findMountPointWithRetry(device.Devnode(), RetryTimeout, RetryInterval)
-	if err != nil && config.MountConfig != "mpd" {
+	if err != nil && m.config.Method != "mpd" {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
 	}
 	m.mountPoints.AddCache(device.Devnode(), mountPoint)
 
-	if strings.HasPrefix(mountPoint, config.MPDLibraryFolder) {
+	if strings.HasPrefix(mountPoint, m.config.MPDLibraryFolder) {
 		return mountPoint, nil
 	}
 
-	target := generateTarget(mountPoint)
+	target := generateTarget(m.config, mountPoint)
 
 	validatedPath, err := m.mounter.validate(device, mountPoint, target)
 	if err != nil {
@@ -130,14 +144,14 @@ func (m *MountManager) seekMountPointWithCacheFallback(device string) (string, e
 	return "", fmt.Errorf("Failed to find %s in mount file and cache", device)
 }
 
-func newMounter(client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
-	switch config.MountConfig {
+func newMounter(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
+	switch config.Method {
 	case "symlink":
-		return newSymlinkFinder(), nil
+		return newSymlinkFinder(config.MPDLibraryFolder, config.MPDUSBSubFolder), nil
 	case "mpd":
-		return newMpdFinder(client)
+		return newMpdFinder(client, config.MPDLibraryFolder)
 	default:
-		return nil, fmt.Errorf("Unsupported mount type: %s", config.MountConfig)
+		return nil, fmt.Errorf("Unsupported mount type: %s", config.Method)
 	}
 }
 

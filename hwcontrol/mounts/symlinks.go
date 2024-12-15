@@ -9,17 +9,19 @@ import (
 	"strings"
 
 	"github.com/jochenvg/go-udev"
-
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 type SymlinkFinder struct {
-	symlinkCache *protectedCache
+	symlinkCache     *protectedCache
+	mpdLibraryFolder string
+	mpdUSBFolder     string
 }
 
-func newSymlinkFinder() *SymlinkFinder {
+func newSymlinkFinder(mpdLibraryFolder, mpdUSBFolder string) *SymlinkFinder {
 	s := &SymlinkFinder{
-		symlinkCache: newCache(),
+		symlinkCache:     newCache(),
+		mpdLibraryFolder: mpdLibraryFolder,
+		mpdUSBFolder:     mpdUSBFolder,
 	}
 	populateSymlinkCache(s)
 	return s
@@ -146,7 +148,7 @@ func isSymlinkMountpoint(path string) (string, error) {
 }
 
 func populateSymlinkCache(s *SymlinkFinder) {
-	mpdUSBFolder := filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder)
+	mpdUSBFolder := filepath.Join(s.mpdLibraryFolder, s.mpdUSBFolder)
 	if _, err := os.Stat(mpdUSBFolder); err != nil && os.IsNotExist(err) {
 		log.Println("MPD USB Folder does not exist for now")
 		return

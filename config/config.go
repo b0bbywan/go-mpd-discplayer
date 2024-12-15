@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
 const (
@@ -18,27 +21,17 @@ const (
 	AppVersion = "0.4"
 )
 
-type MPDConn struct {
-	Type          string // "unix" or "tcp"
-	Address       string // socket path or TCP address
-	ReconnectWait time.Duration
+type PlayerConfig struct {
+	MPDConnection      *mpdplayer.MPDConn
+	NotificationConfig *notifications.NotificationConfig
+	MountConfig        *mounts.MountConfig
+	MPDLibraryFolder   string
+	TargetDevice       string
+	DiscSpeed          int
+	CuerCacheLocation  string
 }
 
-var (
-	MPDConnection    MPDConn
-	MPDLibraryFolder string
-	MPDCueSubfolder  string
-	MPDUSBSubfolder  string
-	TargetDevice     string
-	DiscSpeed        int
-	SoundsLocation   string
-	AudioBackend     string
-	PulseServer      string
-	CuerConfig       *config.Config
-	MountConfig      string
-)
-
-func init() {
+func NewPlayerConfig() (*PlayerConfig, error) {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
@@ -67,43 +60,47 @@ func init() {
 	if err != nil {
 		// File not found is acceptable, only raise errors for other issues
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Fprintf(os.Stderr, "Error reading config file: %w", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("Error reading config file: %w", err)
 		}
 	}
 
-	DiscSpeed = viper.GetInt("DiscSpeed")
-	SoundsLocation = viper.GetString("SoundsLocation")
-	AudioBackend = viper.GetString("AudioBackend")
-	PulseServer = viper.GetString("PulseServer")
-	// Populate the MPDConnection struct
-	MPDConnection = MPDConn{
-		Type:          viper.GetString("MPDConnection.Type"),
-		Address:       viper.GetString("MPDConnection.Address"),
-		ReconnectWait: time.Duration(viper.GetInt("MPDConnection.ReconnectWait") * int(time.Second)),
-	}
-	if err = validateMPDConnection(MPDConnection); err != nil {
-		log.Fatalf("Error validating MPD Connection: %w", err)
-	}
-	MPDLibraryFolder = viper.GetString("MPDLibraryFolder")
-	MPDUSBSubfolder = viper.GetString("MPDUSBSubfolder")
-	MountConfig = viper.GetString("MountConfig")
-	MPDCueSubfolder = viper.GetString("MPDCueSubfolder")
-	cuerCacheLocation := filepath.Join(MPDLibraryFolder, MPDCueSubfolder)
-	log.Printf("CuerCacheLocation: %s", cuerCacheLocation)
-	CuerConfig, err = config.NewConfig(AppName, AppVersion, cuerCacheLocation)
+	cuerCacheLocation := filepath.Join(
+		viper.GetString("MPDLibraryFolder"),
+		viper.GetString("MPDCueSubfolder"),
+	)
+	cuerConfig, err := config.NewConfig(AppName, AppVersion, cuerCacheLocation)
 	if err != nil {
-		log.Fatalf("Failed to create disc-cuer config: %v", err)
+		log.Printf("Failed to create Cuer Config: %v", err)
 	}
-}
 
-// validateMPDConnection checks the validity of the MPD connection settings
-func validateMPDConnection(conn MPDConn) error {
-	if conn.Type != "unix" && conn.Type != "tcp" {
-		return fmt.Errorf("invalid MPDConnection.Type: %s, must be 'unix' or 'tcp'", conn.Type)
+	mpdConnection, err := mpdplayer.NewMPDConnection(
+		viper.GetString("MPDConnection.Type"),
+		viper.GetString("MPDConnection.Address"),
+		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
+		cuerConfig,
+		viper.GetInt("DiscSpeed"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
 	}
-	if conn.Address == "" {
-		return fmt.Errorf("MPDConnection.Address cannot be empty")
-	}
-	return nil
+
+	mountConfig := mounts.NewMountConfig(
+		viper.GetString("MPDLibraryFolder"),
+		viper.GetString("MPDUSBSubfolder"),
+		viper.GetString("MountConfig"),
+	)
+
+	notificationConfig := notifications.NewNotificationConfig(
+		viper.GetString("AudioBackend"),
+		viper.GetString("PulseServer"),
+		viper.GetString("SoundsLocation"),
+	)
+
+	return &PlayerConfig{
+		NotificationConfig: notificationConfig,
+		MPDConnection:      mpdConnection,
+		MountConfig:        mountConfig,
+		MPDLibraryFolder:   viper.GetString("MPDLibraryFolder"),
+		CuerCacheLocation:  cuerCacheLocation,
+	}, nil
 }

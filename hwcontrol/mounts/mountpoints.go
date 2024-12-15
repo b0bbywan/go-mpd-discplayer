@@ -17,12 +17,6 @@ const (
 	RetryInterval = 300 * time.Millisecond
 )
 
-type MountConfig struct {
-	MPDLibraryFolder string
-	MPDUSBSubFolder  string
-	Method           string
-}
-
 type MountManager struct {
 	config      *MountConfig
 	mountPoints *protectedCache
@@ -34,12 +28,10 @@ type Mounter interface {
 	clear(device *udev.Device, target string) (string, error)
 }
 
-func NewMountConfig(base, sub, method string) *MountConfig {
-	return &MountConfig{
-		MPDLibraryFolder: base,
-		MPDUSBSubFolder:  sub,
-		Method:           method,
-	}
+type MountConfig struct {
+	MPDLibraryFolder string
+	MPDUSBSubFolder  string
+	Method           string
 }
 
 func NewMountManager(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
@@ -48,11 +40,20 @@ func NewMountManager(config *MountConfig, client *mpdplayer.ReconnectingMPDClien
 		return nil, fmt.Errorf("Failed to create Mounter: %w", err)
 	}
 	m := &MountManager{
+		config:      config,
 		mountPoints: newCache(),
 		mounter:     mounter,
 	}
 	populateMountPointCache(m)
 	return m, nil
+}
+
+func NewMountConfig(base, sub, method string) *MountConfig {
+	return &MountConfig{
+		MPDLibraryFolder: base,
+		MPDUSBSubFolder:  sub,
+		Method:           method,
+	}
 }
 
 func (m *MountManager) Mount(device *udev.Device) (string, error) {

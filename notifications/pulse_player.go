@@ -3,6 +3,7 @@ package notifications
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/jfreymuth/pulse"
 	"github.com/jfreymuth/pulse/proto"
@@ -46,7 +47,17 @@ func (p *PulseAudioPlayer) Play(name string) error {
 	defer p.sc.mu.Unlock()
 
 	// Start the stream and wait for it to finish
-	stream.Start()
+	done := make(chan struct{})
+	go func() {
+		stream.Start()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+	}
+
 	stream.Drain()
 
 	// Reset the audio stream to the beginning for future playback

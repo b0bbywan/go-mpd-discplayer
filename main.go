@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/b0bbywan/go-mpd-discplayer/cmd"
@@ -26,20 +25,13 @@ func main() {
 		log.Fatalf("Cannot use --play and --stop together. Choose one.")
 	}
 
-	// Initialize context and WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	player, err := cmd.NewPlayer(ctx, cancel)
-	defer player.Cancel()
+	player, err := cmd.NewPlayer()
 	if err != nil {
 		log.Fatalf("Failed to create player: %v", err)
 	}
+	defer player.Close()
 
-	var wg sync.WaitGroup
-	defer cleanUp(&wg, player)
-
-	// Signal handling goroutine to cleanly stop the program
-	wg.Add(1)
-	go signalMonitor(&wg, cancel)
+	go signalMonitor(player.Ctx(), player.Cancel)
 
 	// Handle flags
 	if *playFlag {
@@ -56,7 +48,7 @@ func main() {
 	}
 
 	// Default behavior
-	if err := cmd.Run(&wg, player); err != nil {
+	if err := cmd.Run(player); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 }
@@ -72,26 +64,17 @@ func usage() {
 	fmt.Println("  -h, --help   Display this help message")
 }
 
-func signalMonitor(wg *sync.WaitGroup, cancel context.CancelFunc) {
-	defer wg.Done()
+func signalMonitor(ctx context.Context, cancel context.CancelFunc) {
 	// Handle OS signals to gracefully stop the program
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
-	for range sigChan {
+	select {
+	case <-ctx.Done():
+		log.Println("Received done context. Exiting...")
+		return
+	case <-sigChan:
 		log.Println("Received termination signal. Exiting...")
 		cancel()
-		return
 	}
-}
-
-func cleanUp(wg *sync.WaitGroup, player *cmd.Player) {
-	<-player.Ctx().Done()
-
-	// Cleanup after receiving the termination signal
-	player.Close()
-
-	// Wait for all goroutines to finish
-	wg.Wait()
-	log.Println("All tasks completed. Exiting...")
 }

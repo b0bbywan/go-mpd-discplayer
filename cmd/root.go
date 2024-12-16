@@ -35,19 +35,21 @@ func ExecuteAction(player *Player, device, action string) error {
 	return nil
 }
 
-func Run(wg *sync.WaitGroup, player *Player) error {
+func Run(player *Player) error {
 	var handlers []*hwcontrol.EventHandler
+	var wg sync.WaitGroup
 	// Create event handlers (subscribers) passing the context
-	handlers = append(handlers, newDiscHandlers(wg, player)...)
-	handlers = append(handlers, newUSBHandlers(wg, player)...)
+	handlers = append(handlers, newDiscHandlers(&wg, player)...)
+	handlers = append(handlers, newUSBHandlers(&wg, player)...)
 	for _, handler := range handlers {
-		handler.StartSubscriber(wg, player.Ctx()) // Use the passed context
+		handler.StartSubscriber(&wg, player.Ctx()) // Use the passed context
 	}
 
 	// Start event monitoring (publish events to handlers)
 	wg.Add(1)
-	go loop(wg, player.Ctx(), handlers)
+	go loop(&wg, player.Ctx(), handlers)
 	<-player.Ctx().Done()
+	wg.Wait()
 	return nil
 }
 

@@ -31,7 +31,7 @@ type Player struct {
 	Mounter   *mounts.MountManager
 }
 
-func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) {
+func NewPlayer() (*Player, error) {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
@@ -63,6 +63,7 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 			return nil, fmt.Errorf("Error reading config file: %w", err)
 		}
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 
 	cuerCacheLocation := filepath.Join(
 		viper.GetString("MPDLibraryFolder"),

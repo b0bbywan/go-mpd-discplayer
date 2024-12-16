@@ -138,6 +138,9 @@ func isSymlinkMountpoint(path string) (string, error) {
 	if device == "" {
 		return "", fmt.Errorf("Path %s not found in mountfile, not a mount", path)
 	}
+	if !isRemovableNode(device, path) {
+		return "", fmt.Errorf("%s:%s is not a removable mountpoint", device, path)
+	}
 	fmt.Printf("Found device %s for %s path", device, path)
 	return device, nil
 }

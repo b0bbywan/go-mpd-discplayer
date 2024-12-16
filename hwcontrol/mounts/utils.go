@@ -6,13 +6,15 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 var (
-	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	letters      = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	USBNameRegex = regexp.MustCompile(`^sd.*$`)
 )
 
 func readMountsFile(callback func(device, mountPoint string)) error {
@@ -35,6 +37,25 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 		return fmt.Errorf("error reading %s: %w", mountFile, err)
 	}
 	return nil
+}
+
+func isRemovableNode(devnode, mountPoint string) bool {
+	if !strings.HasPrefix(devnode, "/dev") {
+		return false
+	}
+	if !USBNameRegex.MatchString(filepath.Base(devnode)) {
+		return false
+	}
+	if mountPoint == "/" ||
+		mountPoint == "/home" ||
+		mountPoint == "/var" ||
+		strings.HasPrefix(mountPoint, "/var/lib/docker") ||
+		strings.HasPrefix(mountPoint, "/boot") ||
+		strings.HasPrefix(mountPoint, "/proc") ||
+		strings.HasPrefix(mountPoint, "/dev") {
+		return false
+	}
+	return true
 }
 
 func generateTarget(source string) string {

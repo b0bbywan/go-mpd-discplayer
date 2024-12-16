@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,10 +16,6 @@ import (
 const (
 	RetryTimeout  = 3 * time.Second
 	RetryInterval = 300 * time.Millisecond
-)
-
-var (
-	USBNameRegex = regexp.MustCompile(`^sd.*$`)
 )
 
 type MountManager struct {
@@ -144,25 +139,6 @@ func newMounter(client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
 	default:
 		return nil, fmt.Errorf("Unsupported mount type: %s", config.MountConfig)
 	}
-}
-
-func isRemovableNode(devnode, mountPoint string) bool {
-	if !strings.HasPrefix(devnode, "/dev") {
-		return false
-	}
-	if !USBNameRegex.MatchString(filepath.Base(devnode)) {
-		return false
-	}
-	if mountPoint == "/" ||
-		mountPoint == "/home" ||
-		mountPoint == "/var" ||
-		strings.HasPrefix(mountPoint, "/var/lib/docker") ||
-		strings.HasPrefix(mountPoint, "/boot") ||
-		strings.HasPrefix(mountPoint, "/proc") ||
-		strings.HasPrefix(mountPoint, "/dev") {
-		return false
-	}
-	return true
 }
 
 func seekMountPoint(device string) (string, error) {

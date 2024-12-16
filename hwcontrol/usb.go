@@ -2,12 +2,11 @@ package hwcontrol
 
 import (
 	"log"
-	"regexp"
 
 	"github.com/jochenvg/go-udev"
-)
 
-var usbNameRegex = regexp.MustCompile(`^sd.*$`)
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
+)
 
 func NewBasicUSBHandlers() []*EventHandler {
 	addHandler := newBasicUSBHandler("addUSB", onAddUSBChecker)
@@ -44,7 +43,7 @@ func usbPreChecker(device *udev.Device) bool {
 		return false
 	}
 	sysname := device.Sysname()
-	if !usbNameRegex.MatchString(sysname) {
+	if !mounts.USBNameRegex.MatchString(sysname) {
 		log.Printf("Device sysname '%s' does not match expected kernel rule pattern\n", sysname)
 		return false
 	}

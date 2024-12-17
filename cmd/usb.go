@@ -10,7 +10,7 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newUSBHandlers(wg *sync.WaitGroup, player *Player) []*hwcontrol.EventHandler {
+func (player *Player) newUSBHandlers(wg *sync.WaitGroup) {
 	handlers := hwcontrol.NewBasicUSBHandlers()
 	//TODO check mounter nil
 	startUSBPlayback := func(device *udev.Device) error {
@@ -35,21 +35,19 @@ func newUSBHandlers(wg *sync.WaitGroup, player *Player) []*hwcontrol.EventHandle
 		return nil
 	}
 
-	handlers[0].SetProcessor(
+	player.SetHandlerProcessor(
+		handlers[0],
 		wg,
-		fmt.Sprintf("[%s] Starting USB playback", handlers[0].Name()),
 		startUSBPlayback,
-		player.Notifier,
+		"Starting USB playback",
 		notifications.EventAdd,
 	)
 
-	handlers[1].SetProcessor(
+	player.SetHandlerProcessor(
+		handlers[1],
 		wg,
-		fmt.Sprintf("[%s] Stopping USB playback", handlers[1].Name()),
 		stopUSBPlayback,
-		player.Notifier,
+		"Stopping USB playback",
 		notifications.EventRemove,
 	)
-
-	return handlers
 }

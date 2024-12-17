@@ -36,20 +36,20 @@ func main() {
 
 	// Handle flags
 	if *playFlag {
-		if err := cmd.ExecuteAction(player, *deviceFlag, cmd.ActionPlay); err != nil {
+		if err := player.ExecuteAction(*deviceFlag, cmd.ActionPlay); err != nil {
 			log.Fatalf("Failed to start playback: %v", err)
 		}
 		return
 	}
 	if *stopFlag {
-		if err := cmd.ExecuteAction(player, *deviceFlag, cmd.ActionStop); err != nil {
+		if err := player.ExecuteAction(*deviceFlag, cmd.ActionStop); err != nil {
 			log.Fatalf("Failed to stop playback: %v", err)
 		}
 		return
 	}
 
 	// Default behavior
-	if err := cmd.Run(player); err != nil {
+	if err := player.Run(); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 }

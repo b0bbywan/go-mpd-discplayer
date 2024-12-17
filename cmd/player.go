@@ -7,11 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/jochenvg/go-udev"
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
@@ -19,16 +22,18 @@ import (
 
 const (
 	AppName    = "mpd-discplayer"
-	AppVersion = "0.4"
+	AppVersion = "0.5"
 )
 
 type Player struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
+	wg        *sync.WaitGroup
 	discSpeed int
 	Client    *mpdplayer.ReconnectingMPDClient
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
+	handlers  []*hwcontrol.EventHandler
 }
 
 func NewPlayer() (*Player, error) {
@@ -64,6 +69,7 @@ func NewPlayer() (*Player, error) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 
 	cuerCacheLocation := filepath.Join(
 		viper.GetString("MPDLibraryFolder"),
@@ -105,6 +111,7 @@ func NewPlayer() (*Player, error) {
 	return &Player{
 		ctx:       ctx,
 		cancel:    cancel,
+		wg:        &wg,
 		discSpeed: viper.GetInt("DiscSpeed"),
 		Client:    mpdClient,
 		Notifier:  notifier,
@@ -112,27 +119,71 @@ func NewPlayer() (*Player, error) {
 	}, nil
 }
 
-func (p *Player) Ctx() context.Context {
-	return p.ctx
+func (p *Player) Start() {
+	// Create event handlers (subscribers) passing the context
+	p.newDiscHandlers()
+	p.newUSBHandlers()
+
+	for _, handler := range p.handlers {
+		handler.StartSubscriber(p.wg, p.ctx)
+	}
+	p.wg.Add(1)
+	go p.run()
 }
 
-func (p *Player) Cancel() {
-	p.cancel()
+func (p *Player) run() {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-p.ctx.Done():
+			log.Println("Stopping from cmd.")
+			return
+		default:
+			if err := hwcontrol.StartMonitor(p.ctx, p.handlers); err != nil {
+				log.Printf("Error starting monitor: %w\n", err)
+				time.Sleep(time.Second) // Retry after some delay
+				continue
+			}
+		}
+	}
+}
+
+func (p *Player) SetHandlerProcessor(
+	handler *hwcontrol.EventHandler,
+	callback func(device *udev.Device) error,
+	logMessage, eventName string,
+) {
+	handler.SetProcessor(
+		p.wg,
+		logMessage,
+		callback,
+		p.Notifier,
+		eventName,
+	)
+	p.AddHandler(handler)
+}
+
+func (p *Player) AddHandler(handlers ...*hwcontrol.EventHandler) {
+	p.handlers = append(p.handlers, handlers...)
 }
 
 func (p *Player) Close() {
-	log.Println("Player closing")
 	p.cancel()
-	log.Println("Player cancel called")
 	if p.Client != nil {
 		p.Client.Disconnect()
 	}
 	if p.Notifier != nil {
 		p.Notifier.Close()
 	}
-	log.Println("Player Closed")
+	p.wg.Wait()
 }
 
 func (p *Player) GetDiscSpeed() int {
 	return p.discSpeed
+}
+
+func (p *Player) NotifyEvent(name string) {
+	if p.Notifier != nil {
+		p.Notifier.PlayEvent(name)
+	}
 }

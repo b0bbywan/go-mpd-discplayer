@@ -25,32 +25,33 @@ func main() {
 		log.Fatalf("Cannot use --play and --stop together. Choose one.")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	go signalMonitor(ctx, cancel)
+
 	player, err := cmd.NewPlayer()
 	if err != nil {
 		log.Fatalf("Failed to create player: %v", err)
 	}
 	defer player.Close()
 
-	go signalMonitor(player.Ctx(), player.Cancel)
-
 	// Handle flags
 	if *playFlag {
-		if err := cmd.ExecuteAction(player, *deviceFlag, cmd.ActionPlay); err != nil {
+		if err := player.ExecuteAction(*deviceFlag, cmd.ActionPlay); err != nil {
 			log.Fatalf("Failed to start playback: %v", err)
 		}
 		return
 	}
 	if *stopFlag {
-		if err := cmd.ExecuteAction(player, *deviceFlag, cmd.ActionStop); err != nil {
+		if err := player.ExecuteAction(*deviceFlag, cmd.ActionStop); err != nil {
 			log.Fatalf("Failed to stop playback: %v", err)
 		}
 		return
 	}
 
 	// Default behavior
-	if err := cmd.Run(player); err != nil {
-		log.Fatalf("error: %v", err)
-	}
+	player.Start()
+
+	<-ctx.Done()
 }
 
 func usage() {
@@ -69,12 +70,9 @@ func signalMonitor(ctx context.Context, cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
-	select {
-	case <-ctx.Done():
-		log.Println("Received done context. Exiting...")
-		return
-	case <-sigChan:
+	for range sigChan {
 		log.Println("Received termination signal. Exiting...")
 		cancel()
+		return
 	}
 }

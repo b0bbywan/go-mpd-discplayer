@@ -7,11 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/jochenvg/go-udev"
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
@@ -29,6 +32,7 @@ type Player struct {
 	Client    *mpdplayer.ReconnectingMPDClient
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
+	handlers  []*hwcontrol.EventHandler
 }
 
 func NewPlayer() (*Player, error) {
@@ -112,6 +116,53 @@ func NewPlayer() (*Player, error) {
 	}, nil
 }
 
+func (p *Player) Start(wg *sync.WaitGroup) {
+	for _, handler := range p.handlers {
+		handler.StartSubscriber(wg, p.Ctx())
+	}
+	wg.Add(1)
+	go func () {
+		defer wg.Done()
+		p.run()
+	}()
+}
+
+func (p *Player) run() {
+	for {
+		select {
+		case <-p.Ctx().Done():
+			log.Println("Stopping from cmd.")
+			return
+		default:
+			if err := hwcontrol.StartMonitor(p.Ctx(), p.handlers); err != nil {
+				log.Printf("Error starting monitor: %w\n", err)
+				time.Sleep(time.Second) // Retry after some delay
+				continue
+			}
+		}
+	}
+}
+
+func (p *Player) SetHandlerProcessor(
+	handler *hwcontrol.EventHandler,
+	wg *sync.WaitGroup,
+	callback func(device *udev.Device) error,
+	logMessage, eventName string,
+) {
+	handler.SetProcessor(
+		wg,
+		fmt.Sprintf("[%s] %s", handler.Name(), logMessage),
+		callback,
+		p.Notifier,
+		eventName,
+	)
+	p.AddHandler(handler)
+}
+
+func (p *Player) AddHandler(handlers ...*hwcontrol.EventHandler) {
+	p.handlers = append(p.handlers, handlers...)
+}
+
 func (p *Player) Ctx() context.Context {
 	return p.ctx
 }
@@ -131,4 +182,10 @@ func (p *Player) Close() {
 
 func (p *Player) GetDiscSpeed() int {
 	return p.discSpeed
+}
+
+func (p *Player) NotifyEvent(name string) {
+	if p.Notifier != nil {
+		p.Notifier.PlayEvent(name)
+	}
 }

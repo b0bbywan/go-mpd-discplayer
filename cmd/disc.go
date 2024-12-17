@@ -11,7 +11,7 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
 )
 
-func newDiscHandlers(wg *sync.WaitGroup, player *Player) []*hwcontrol.EventHandler {
+func (player *Player) newDiscHandlers(wg *sync.WaitGroup) {
 	// Use VeryNewBasicDiscHandler to create the event handlers
 	handlers := hwcontrol.NewBasicDiscHandlers()
 
@@ -32,23 +32,19 @@ func newDiscHandlers(wg *sync.WaitGroup, player *Player) []*hwcontrol.EventHandl
 		return nil
 	}
 
-	// Define action for the "add" event (handler[0])
-	handlers[0].SetProcessor(
+	player.SetHandlerProcessor(
+		handlers[0],
 		wg,
-		fmt.Sprintf("[%s] Starting Disc Playback", handlers[0].Name()),
 		startDiscPlayback,
-		player.Notifier,
+		"Starting Disc Playback",
 		notifications.EventAdd,
 	)
 
-	// Define action for the "remove" event (handler[1])
-	handlers[1].SetProcessor(
+	player.SetHandlerProcessor(
+		handlers[1],
 		wg,
-		fmt.Sprintf("[%s] Stopping Disc Playback", handlers[1].Name()),
 		stopDiscPlayback,
-		player.Notifier,
+		"Stopping Disc Playback",
 		notifications.EventRemove,
 	)
-
-	return handlers
 }

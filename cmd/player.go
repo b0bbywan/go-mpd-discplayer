@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	AppName    = "mpd-discplayer"
-	AppVersion = "0.4"
+	AppName          = "mpd-discplayer"
+	AppVersion       = "0.4"
+	defaultMpdFolder = "/var/lib/mpd/music"
 )
 
 type Player struct {
@@ -39,7 +40,7 @@ func NewPlayer() (*Player, error) {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
-	viper.SetDefault("MPDLibraryFolder", "/var/lib/mpd/music")
+	viper.SetDefault("MPDLibraryFolder", defaultMpdFolder)
 	viper.SetDefault("MPDCueSubfolder", ".disc-cuer")
 	viper.SetDefault("MPDUSBSubfolder", ".")
 	viper.SetDefault("DiscSpeed", 12)
@@ -68,6 +69,18 @@ func NewPlayer() (*Player, error) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	mpdConnection, err := mpdplayer.NewMPDConnection(
+		viper.GetString("MPDConnection.Type"),
+		viper.GetString("MPDConnection.Address"),
+		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
+	}
+	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, mpdConnection)
+	if err = setMpdFolder(mpdClient); err != nil {
+		log.Printf("warning: %v", err)
+	}
 
 	cuerCacheLocation := filepath.Join(
 		viper.GetString("MPDLibraryFolder"),
@@ -77,17 +90,7 @@ func NewPlayer() (*Player, error) {
 	if err != nil {
 		log.Printf("Failed to create Cuer Config: %v", err)
 	}
-
-	mpdConnection, err := mpdplayer.NewMPDConnection(
-		viper.GetString("MPDConnection.Type"),
-		viper.GetString("MPDConnection.Address"),
-		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
-		cuerConfig,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
-	}
-	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, mpdConnection)
+	mpdClient.SetCuerConfig(cuerConfig)
 
 	mountConfig := mounts.NewMountConfig(
 		viper.GetString("MPDLibraryFolder"),
@@ -188,4 +191,16 @@ func (p *Player) NotifyEvent(name string) {
 	if p.Notifier != nil {
 		p.Notifier.PlayEvent(name)
 	}
+}
+
+func setMpdFolder(mpdClient *mpdplayer.ReconnectingMPDClient) error {
+	if viper.GetString("MPDLibraryFolder") == defaultMpdFolder {
+		musicDir, err := mpdClient.GetConfig()
+		if err != nil {
+			return fmt.Errorf("warning: Couldn't get music_directory from mpd: %w", err)
+		}
+		viper.Set("MPDLibraryFolder", musicDir)
+		log.Printf("Overriding MPDLibraryFolder with music directory from MPD: %s", musicDir)
+	}
+	return nil
 }

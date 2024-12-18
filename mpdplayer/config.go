@@ -14,12 +14,11 @@ type MPDConn struct {
 	CuerConfig    *config.Config
 }
 
-func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cuerConfig *config.Config) (*MPDConn, error) {
+func NewMPDConnection(connectionType, address string, reconnectWait time.Duration) (*MPDConn, error) {
 	conn := &MPDConn{
 		Type:          connectionType,
 		Address:       address,
 		ReconnectWait: reconnectWait,
-		CuerConfig:    cuerConfig,
 	}
 
 	if err := validateMPDConnection(conn); err != nil {
@@ -37,4 +36,8 @@ func validateMPDConnection(conn *MPDConn) error {
 		return fmt.Errorf("MPDConnection.Address cannot be empty")
 	}
 	return nil
+}
+
+func (rc *ReconnectingMPDClient) SetCuerConfig(cuerConfig *config.Config) {
+	rc.mpcConfig.CuerConfig = cuerConfig
 }

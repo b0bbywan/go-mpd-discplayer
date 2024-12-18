@@ -89,6 +89,22 @@ func (rc *ReconnectingMPDClient) ClearMounts() error {
 	})
 }
 
+func (rc *ReconnectingMPDClient) GetConfig() (string, error) {
+	var config mpd.Attrs
+	var err error
+	if err = rc.execute(func(client *mpd.Client) error {
+		config, err = client.Command("config").Attrs()
+		return err
+	}); err != nil {
+		return "", fmt.Errorf("Failed to get MPD Config from server: %w", err)
+	}
+	musicDirectory, ok := config["music_directory"]
+	if !ok {
+		return "", fmt.Errorf("music_directory not found in config")
+	}
+	return musicDirectory, nil
+}
+
 // attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
 // If loading the CUE file fails, it falls back to loading individual CDDA tracks,
 func (rc *ReconnectingMPDClient) attemptToLoadCD(client *mpd.Client, device string) error {

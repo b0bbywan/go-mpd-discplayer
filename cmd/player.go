@@ -1,0 +1,206 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/jochenvg/go-udev"
+	"github.com/spf13/viper"
+
+	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/notifications"
+)
+
+const (
+	AppName          = "mpd-discplayer"
+	AppVersion       = "0.4"
+	defaultMpdFolder = "/var/lib/mpd/music"
+)
+
+type Player struct {
+	ctx       context.Context
+	cancel    context.CancelFunc
+	discSpeed int
+	Client    *mpdplayer.ReconnectingMPDClient
+	Notifier  *notifications.Notifier
+	Mounter   *mounts.MountManager
+	handlers  []*hwcontrol.EventHandler
+}
+
+func NewPlayer() (*Player, error) {
+	viper.SetDefault("MPDConnection.Type", "tcp")
+	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
+	viper.SetDefault("MPDConnection.ReconnectWait", 30)
+	viper.SetDefault("MPDLibraryFolder", defaultMpdFolder)
+	viper.SetDefault("MPDCueSubfolder", ".disc-cuer")
+	viper.SetDefault("MPDUSBSubfolder", ".")
+	viper.SetDefault("DiscSpeed", 12)
+	viper.SetDefault("SoundsLocation", filepath.Join("/usr/local/share/", AppName))
+	viper.SetDefault("AudioBackend", "pulse")
+	viper.SetDefault("PulseServer", "")
+	viper.SetDefault("MountConfig", "mpd")
+
+	// Load from configuration file, environment variables, and CLI flags
+	viper.SetConfigName("config")                       // name of config file (without extension)
+	viper.SetConfigType("yaml")                         // config file format
+	viper.AddConfigPath(filepath.Join("/etc", AppName)) // Global configuration path
+	if home, err := os.UserHomeDir(); err == nil {
+		viper.AddConfigPath(filepath.Join(home, ".config", AppName)) // User config path
+	}
+
+	// Environment variable support
+	viper.SetEnvPrefix(strings.ReplaceAll(AppName, "-", "_")) // environment variables start with MPD_PLAYER
+	viper.AutomaticEnv()
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		// File not found is acceptable, only raise errors for other issues
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("Error reading config file: %w", err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mpdConnection, err := mpdplayer.NewMPDConnection(
+		viper.GetString("MPDConnection.Type"),
+		viper.GetString("MPDConnection.Address"),
+		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
+	}
+	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, mpdConnection)
+	if err = setMpdFolder(mpdClient); err != nil {
+		log.Printf("warning: %v", err)
+	}
+
+	cuerCacheLocation := filepath.Join(
+		viper.GetString("MPDLibraryFolder"),
+		viper.GetString("MPDCueSubfolder"),
+	)
+	cuerConfig, err := config.NewConfig(AppName, AppVersion, cuerCacheLocation)
+	if err != nil {
+		log.Printf("Failed to create Cuer Config: %v", err)
+	}
+	mpdClient.SetCuerConfig(cuerConfig)
+
+	mountConfig := mounts.NewMountConfig(
+		viper.GetString("MPDLibraryFolder"),
+		viper.GetString("MPDUSBSubfolder"),
+		viper.GetString("MountConfig"),
+	)
+	mounter, err := mounts.NewMountManager(mountConfig, mpdClient)
+	if err != nil {
+		return nil, fmt.Errorf("USB Playback disabled: Failed to create mount manager: %w", err)
+	}
+
+	notificationConfig := notifications.NewNotificationConfig(
+		viper.GetString("AudioBackend"),
+		viper.GetString("PulseServer"),
+		viper.GetString("SoundsLocation"),
+	)
+	notifier := notifications.NewNotifier(notificationConfig)
+
+	return &Player{
+		ctx:       ctx,
+		cancel:    cancel,
+		discSpeed: viper.GetInt("DiscSpeed"),
+		Client:    mpdClient,
+		Notifier:  notifier,
+		Mounter:   mounter,
+	}, nil
+}
+
+func (p *Player) Start(wg *sync.WaitGroup) {
+	for _, handler := range p.handlers {
+		handler.StartSubscriber(wg, p.Ctx())
+	}
+	wg.Add(1)
+	go func () {
+		defer wg.Done()
+		p.run()
+	}()
+}
+
+func (p *Player) run() {
+	for {
+		select {
+		case <-p.Ctx().Done():
+			log.Println("Stopping from cmd.")
+			return
+		default:
+			if err := hwcontrol.StartMonitor(p.Ctx(), p.handlers); err != nil {
+				log.Printf("Error starting monitor: %w\n", err)
+				time.Sleep(time.Second) // Retry after some delay
+				continue
+			}
+		}
+	}
+}
+
+func (p *Player) SetHandlerProcessor(
+	handler *hwcontrol.EventHandler,
+	wg *sync.WaitGroup,
+	callback func(device *udev.Device) error,
+	logMessage, eventName string,
+) {
+	handler.SetProcessor(
+		wg,
+		fmt.Sprintf("[%s] %s", handler.Name(), logMessage),
+		callback,
+		p.Notifier,
+		eventName,
+	)
+	p.AddHandler(handler)
+}
+
+func (p *Player) AddHandler(handlers ...*hwcontrol.EventHandler) {
+	p.handlers = append(p.handlers, handlers...)
+}
+
+func (p *Player) Ctx() context.Context {
+	return p.ctx
+}
+
+func (p *Player) Cancel() {
+	p.cancel()
+}
+
+func (p *Player) Close() {
+	if p.Client != nil {
+		p.Client.Disconnect()
+	}
+	if p.Notifier != nil {
+		p.Notifier.Close()
+	}
+}
+
+func (p *Player) GetDiscSpeed() int {
+	return p.discSpeed
+}
+
+func (p *Player) NotifyEvent(name string) {
+	if p.Notifier != nil {
+		p.Notifier.PlayEvent(name)
+	}
+}
+
+func setMpdFolder(mpdClient *mpdplayer.ReconnectingMPDClient) error {
+	if viper.GetString("MPDLibraryFolder") == defaultMpdFolder {
+		musicDir, err := mpdClient.GetConfig()
+		if err != nil {
+			return fmt.Errorf("warning: Couldn't get music_directory from mpd: %w", err)
+		}
+		viper.Set("MPDLibraryFolder", musicDir)
+		log.Printf("Overriding MPDLibraryFolder with music directory from MPD: %s", musicDir)
+	}
+	return nil
+}

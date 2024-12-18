@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 const (
@@ -14,14 +12,14 @@ const (
 	EventError  = "error"
 )
 
-var soundPaths = map[string]string{
-	EventAdd:    filepath.Join(config.SoundsLocation, "in.mp3"),
-	EventRemove: filepath.Join(config.SoundsLocation, "out.mp3"),
-	EventError:  filepath.Join(config.SoundsLocation, "error.mp3"),
-}
-
 type Notifier struct {
 	Player
+}
+
+type NotificationConfig struct {
+	AudioBackend string
+	SoundPaths   map[string]string
+	PulseServer  string
 }
 
 type Player interface {
@@ -29,9 +27,21 @@ type Player interface {
 	Close()
 }
 
+func NewNotificationConfig(audioBackend, pulseServer, soundsLocation string) *NotificationConfig {
+	return &NotificationConfig{
+		AudioBackend: audioBackend,
+		PulseServer:  pulseServer,
+		SoundPaths: map[string]string{
+			EventAdd:    filepath.Join(soundsLocation, "in.mp3"),
+			EventRemove: filepath.Join(soundsLocation, "out.mp3"),
+			EventError:  filepath.Join(soundsLocation, "error.mp3"),
+		},
+	}
+}
+
 // NewRootNotifier creates a new instance of RootNotifier.
-func NewNotifier() *Notifier {
-	sc, err := NewSoundCache(soundPaths)
+func NewNotifier(config *NotificationConfig) *Notifier {
+	sc, err := NewSoundCache(config.SoundPaths)
 	if err != nil {
 		log.Printf("Failed to load sound cache: %v", err)
 		return nil
@@ -42,7 +52,7 @@ func NewNotifier() *Notifier {
 	case "alsa":
 		player, err = NewOtoPlayer(sc)
 	case "pulse":
-		player, err = NewPulseAudioPlayer(sc)
+		player, err = NewPulseAudioPlayer(sc, config.PulseServer)
 	case "none":
 		log.Printf("Notifications disabled\n")
 		return nil

@@ -7,8 +7,6 @@ import (
 
 	"github.com/jfreymuth/pulse"
 	"github.com/jfreymuth/pulse/proto"
-
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 type PulseAudioPlayer struct {
@@ -16,8 +14,8 @@ type PulseAudioPlayer struct {
 	client *pulse.Client
 }
 
-func NewPulseAudioPlayer(sc *SoundCache) (*PulseAudioPlayer, error) {
-	pulseServer := pulse.ClientServerString(config.PulseServer)
+func NewPulseAudioPlayer(sc *SoundCache, pulseServerString string) (*PulseAudioPlayer, error) {
+	pulseServer := pulse.ClientServerString(pulseServerString)
 	client, err := pulse.NewClient(pulseServer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PulseAudio: %w", err)

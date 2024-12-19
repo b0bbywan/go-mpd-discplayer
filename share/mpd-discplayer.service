@@ -1,0 +1,16 @@
+[Unit]
+Description=A daemon to autoplay discs and usb removables through mpd server
+Documentation=https://github.com/b0bbywan/mpd-discplayer
+Wants=sound.target
+After=sound.target
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/mpd-discplayer
+Restart=always
+RestartSec=12
+TimeoutSec=30
+
+[Install]
+WantedBy=default.target

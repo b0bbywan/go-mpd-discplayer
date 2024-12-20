@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 var (
@@ -58,8 +56,8 @@ func isRemovableNode(devnode, mountPoint string) bool {
 	return true
 }
 
-func generateTarget(source string) string {
-	target := filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubfolder, filepath.Base(source))
+func generateTarget(config *MountConfig, source string) string {
+	target := filepath.Join(config.MPDLibraryFolder, config.MPDUSBSubFolder, filepath.Base(source))
 	_, err := os.Stat(target)
 	if os.IsNotExist(err) {
 		return target

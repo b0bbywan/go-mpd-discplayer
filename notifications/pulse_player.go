@@ -41,9 +41,9 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("failed to create PulseAudio playback stream: %w", err)
 	}
 	defer stream.Close()
-	p.sc.mu.Lock() // Ensure no concurrent writes to the stream
+/*	p.sc.mu.Lock() // Ensure no concurrent writes to the stream
 	defer p.sc.mu.Unlock()
-
+*/
 	// Start the stream and wait for it to finish
 	done := make(chan struct{})
 	go func() {

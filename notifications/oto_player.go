@@ -33,7 +33,6 @@ func (o *OtoPlayer) Play(name string) error {
 		return fmt.Errorf("Could not play %s: %w", name, err)
 	}
 
-	o.sc.mu.Lock()
 	// Create a new player and play the sound
 	player := o.otoCtx.NewPlayer(data)
 	defer player.Close()
@@ -44,7 +43,6 @@ func (o *OtoPlayer) Play(name string) error {
 	for player.IsPlaying() {
 		time.Sleep(time.Millisecond)
 	}
-	o.sc.mu.Unlock()
 
 	if _, err := player.(io.Seeker).Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("Failed to reset %s after playing: %w", name, err)

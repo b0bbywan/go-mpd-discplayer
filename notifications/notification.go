@@ -69,12 +69,10 @@ func NewNotifier(config *NotificationConfig) *Notifier {
 	}
 
 	log.Printf("%s notifier initialized\n", config.AudioBackend)
-//	var wg sync.WaitGroup
 	n := &Notifier{
 		Player: player,
 		queue: make(chan string, 3), // Adjust buffer size as needed
 		stop:  make(chan struct{}),
-//		wg:    wg,
 	}
 	n.wg.Add(1)
 	go n.processQueue()
@@ -119,12 +117,4 @@ func (n *Notifier) Close() {
 			n.Player.Close()
 		}
 	}
-}
-
-func (n *Notifier) play(name string) {
-	go func() {
-		if err := n.Play(name); err != nil {
-			log.Printf("Failed to play sound (%s): %v", name, err)
-		}
-	}()
 }

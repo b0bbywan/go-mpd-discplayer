@@ -3,6 +3,7 @@ package notifications
 import (
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/jfreymuth/pulse"
@@ -34,6 +35,10 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("Could not play %s: %w", name, err)
 	}
 
+	if _, err := data.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to reset %s before playing: %w", name, err)
+	}
+
 	reader := pulse.NewReader(data, proto.FormatInt16LE)
 	// Use PulseAudio's NewPlayback with the sound data as a reader
 	stream, err := p.client.NewPlayback(reader, pulse.PlaybackStereo)
@@ -41,9 +46,7 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("failed to create PulseAudio playback stream: %w", err)
 	}
 	defer stream.Close()
-/*	p.sc.mu.Lock() // Ensure no concurrent writes to the stream
-	defer p.sc.mu.Unlock()
-*/
+
 	// Start the stream and wait for it to finish
 	done := make(chan struct{})
 	go func() {
@@ -53,14 +56,13 @@ func (p *PulseAudioPlayer) Play(name string) error {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(1500 * time.Millisecond):
 	}
 
 	stream.Drain()
-
-	// Reset the audio stream to the beginning for future playback
-	if _, err := data.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to reset %s after playing: %w", name, err)
+	log.Printf("Underflow: %v", stream.Underflow())
+	if stream.Error() != nil {
+		return fmt.Errorf("Error playing stream %s %w:", name, stream.Error())
 	}
 
 	return nil

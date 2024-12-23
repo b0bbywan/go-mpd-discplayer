@@ -42,7 +42,7 @@ func (o *OtoPlayer) Play(name string) error {
 
 	// We can wait for the sound to finish playing using something like this
 	for player.IsPlaying() {
-		time.Sleep(time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 //	o.sc.mu.Unlock()
 

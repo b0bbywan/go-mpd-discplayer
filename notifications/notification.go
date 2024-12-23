@@ -5,8 +5,6 @@ import (
 	"log"
 	"path/filepath"
 	"sync"
-
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 const (

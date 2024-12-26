@@ -35,6 +35,7 @@ type Player struct {
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
 	handlers  []*hwcontrol.EventHandler
+	scheduler *scheduler
 }
 
 func NewPlayer() (*Player, error) {
@@ -49,6 +50,7 @@ func NewPlayer() (*Player, error) {
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
 	viper.SetDefault("MountConfig", "mpd")
+	viper.SetDefault("Schedule", make(map[string]string))
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                       // name of config file (without extension)
@@ -112,6 +114,8 @@ func NewPlayer() (*Player, error) {
 	)
 	notifier := notifications.NewNotifier(notificationConfig)
 
+	scheduler := newScheduler(mpdClient, viper.GetStringMapString("Schedule"))
+
 	return &Player{
 		ctx:       ctx,
 		cancel:    cancel,
@@ -120,6 +124,7 @@ func NewPlayer() (*Player, error) {
 		Client:    mpdClient,
 		Notifier:  notifier,
 		Mounter:   mounter,
+		scheduler: scheduler,
 	}, nil
 }
 
@@ -179,6 +184,7 @@ func (p *Player) Close() {
 	if p.Notifier != nil {
 		p.Notifier.Close()
 	}
+	p.StopScheduler()
 	p.wg.Wait()
 }
 

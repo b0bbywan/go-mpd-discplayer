@@ -22,7 +22,7 @@ import (
 
 const (
 	AppName          = "mpd-discplayer"
-	AppVersion       = "0.5"
+	AppVersion       = "0.6"
 	defaultMpdFolder = "/var/lib/mpd/music"
 )
 
@@ -114,7 +114,8 @@ func NewPlayer() (*Player, error) {
 	)
 	notifier := notifications.NewNotifier(notificationConfig)
 
-	scheduler := newScheduler(mpdClient, viper.GetStringMapString("Schedule"))
+	schedules := newSchedulerUris(mpdClient, notifier, viper.GetStringMapString("Schedule"))
+	scheduler := newScheduler(schedules)
 
 	return &Player{
 		ctx:       ctx,
@@ -129,6 +130,8 @@ func NewPlayer() (*Player, error) {
 }
 
 func (p *Player) Start() {
+	p.StartScheduler()
+
 	// Create event handlers (subscribers) passing the context
 	p.newDiscHandlers()
 	p.newUSBHandlers()
@@ -184,7 +187,9 @@ func (p *Player) Close() {
 	if p.Notifier != nil {
 		p.Notifier.Close()
 	}
-	p.StopScheduler()
+	if p.scheduler != nil {
+		p.scheduler.Close()
+	}
 	p.wg.Wait()
 }
 

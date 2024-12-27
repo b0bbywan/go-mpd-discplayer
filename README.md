@@ -146,6 +146,7 @@ PulseServer: ""
 MountConfig: "mpd"
 MPDCueSubfolder: ".disc-cuer"
 MPDUSBSubfolder: ".udisks"
+Schedule: {}
 
 ```
 
@@ -159,13 +160,7 @@ The type of connection to use. Supported values:
 
 - **Address**:
 	- For Type: `"unix"`, this is the path to the MPD socket file (e.g., `/var/run/mpd/socket` ) *(recommended)*.
-	- For Type: `"tcp"`, this is the <hostname>:<port> of the MPD server (e.g., `127.0.0.1:6600`) *(default)*. *(Even though remote MPD server are supported, they won't work without additional setup not covered in this documentation)*
-
-
-#### Notifications Options
-- **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
-- **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
-- **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.mp3`, `out.mp3` and `error.mp3` to be present in the specified folder or notifications will be disabled.
+	- For Type: `"tcp"`, this is the <hostname>:<port> of the MPD server (e.g., `127.0.0.1:6600`) *(default)*.
 
 #### Mouting Options
 For USB stick support, the content of the stick must be made available in MPD database. MPD-Discplayer supports the native mpd mouting feature, or symlinks for MPD servers that do not support this feature.
@@ -174,6 +169,36 @@ For USB stick support, the content of the stick must be made available in MPD da
 	- `symlink`
 - **MPDLibraryFolder**: path to MPD music_directory *(self discovered when using MPD unix socket)*
 - **MPDUSBSubfolder**: path inside `MPDLibraryFolder` to store symlinks to usb original mountpoints. Only with `MountConfig: "symlink"`, not used with `MountConfig: "mpd"`
+
+#### Schedule Option
+The Schedule option allows you to automate playback of MPD-compatible URIs based on a cron schedule. It currently supports the following:
+	- **Webradio** URIs (e.g., HTTP streams).
+	- **Audio CDs** (using cdda:// protocol).
+	- **USB devices** (using mount points or symlinks).
+	- **MPD Database** (use `mpc listall` to list MPD Database)
+
+Incompatible cron will be discarded and logged on startup. A notification will be trigerred before starting the scheduled playback and if an error happens while loading the uri.
+
+Example configuration:
+
+```yaml
+Schedule:
+  # Play a reggae radio stream on weekdays at 6:30 AM
+  "30 6 * * 1-5": "//hd.lagrosseradio.info/lagrosseradio-reggae-192.mp3"
+  # Play an audio CD on Saturdays at 9:00 AM
+  "0 9 * * 6": "cdda://"
+  # Play from a USB device (symlink mount) on Sundays at 9:00 PM
+  "0 21 * * 7": ".udisks/{usb_label}"
+  # Play from an MPD-mounted USB device on Sundays at 9:00 PM
+  "0 21 * * 7": "{usb_label}"
+
+```
+Note: Ensure that the `usb_label` matches the label of the USB device. For audio CDs, only `cdda://` protocol is supported for now.
+
+#### Notifications Options
+- **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
+- **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
+- **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.mp3`, `out.mp3` and `error.mp3` to be present in the specified folder or notifications will be disabled.
 
 ### Environment Variables
 
@@ -192,7 +217,8 @@ If a configuration file is not provided, you can use environment variables to se
 | `MPD_DISCPLAYER_AUDIOBACKEND` | `AudioBackend` | `pulse` |
 | `MPD_DISCPLAYER_PULSESERVER` | `PulseServer` | *(Default to `""`, e.g. local pulseaudio unix socket)* | `MPD_DISCPLAYER_MOUNTCONFIG` | `MountConfig` | `mpd`
 | `MPD_DISCPLAYER_MPDCUESUBFOLDER` | `MPDCueSubfolder` | `.disc-cuer` |
-| `MPD_DISCPLAYER_MPDUSBSUBFOLDER` | `MPDUSBSubfolder` | `.udisks`
+| `MPD_DISCPLAYER_MPDUSBSUBFOLDER` | `MPDUSBSubfolder` | `.udisks` |
+| *(Unsupported)* | `Schedule` | *{}  (empty, disables scheduling)* |
 
 #### Priority of Configuration
 The configuration is loaded in the following order of priority:

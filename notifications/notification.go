@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"sync"
 )
 
 const (
@@ -14,6 +15,9 @@ const (
 
 type Notifier struct {
 	Player
+	queue       chan string
+	stop        chan struct{}
+	wg          sync.WaitGroup
 }
 
 type NotificationConfig struct {
@@ -65,14 +69,40 @@ func NewNotifier(config *NotificationConfig) *Notifier {
 	}
 
 	log.Printf("%s notifier initialized\n", config.AudioBackend)
+	n := &Notifier{
+		Player: player,
+		queue: make(chan string, 3), // Adjust buffer size as needed
+		stop:  make(chan struct{}),
+	}
+	n.wg.Add(1)
+	go n.processQueue()
 
-	return &Notifier{
-		player,
+	return n
+
+}
+
+func (n *Notifier) processQueue() {
+	defer n.wg.Done()
+	for {
+		select {
+		case sound := <-n.queue:
+			log.Printf("Playing %s", sound)
+			if err := n.Play(sound); err != nil {
+				log.Printf("Failed to play sound (%s): %v", sound, err)
+			}
+		case <-n.stop:
+			return
+		}
 	}
 }
 
 func (n *Notifier) PlayEvent(event string) {
-	n.play(event)
+	select {
+	case n.queue <- event:
+		// Sound successfully queued
+	default:
+		log.Printf("Sound queue is full; dropping event: %s", event)
+	}
 }
 
 func (n *Notifier) PlayError() {
@@ -80,15 +110,11 @@ func (n *Notifier) PlayError() {
 }
 
 func (n *Notifier) Close() {
-	if n != nil && n.Player != nil {
-		n.Player.Close()
-	}
-}
-
-func (n *Notifier) play(name string) {
-	go func() {
-		if err := n.Play(name); err != nil {
-			log.Printf("Failed to play sound (%s): %v", name, err)
+	if n != nil {
+		close(n.stop)
+		n.wg.Wait() // Wait for the processing goroutine to finish
+		if n.Player != nil {
+			n.Player.Close()
 		}
-	}()
+	}
 }

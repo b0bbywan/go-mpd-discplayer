@@ -1,8 +1,10 @@
 package notifications
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/jfreymuth/pulse"
@@ -34,6 +36,10 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("Could not play %s: %w", name, err)
 	}
 
+	if _, err := data.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to reset %s before playing: %w", name, err)
+	}
+
 	reader := pulse.NewReader(data, proto.FormatInt16LE)
 	// Use PulseAudio's NewPlayback with the sound data as a reader
 	stream, err := p.client.NewPlayback(reader, pulse.PlaybackStereo)
@@ -41,28 +47,33 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("failed to create PulseAudio playback stream: %w", err)
 	}
 	defer stream.Close()
-	p.sc.mu.Lock() // Ensure no concurrent writes to the stream
-	defer p.sc.mu.Unlock()
 
-	// Start the stream and wait for it to finish
-	done := make(chan struct{})
-	go func() {
-		stream.Start()
-		done <- struct{}{}
-	}()
+	// Create an error channel for the playback result
+	errChan := make(chan error, 1)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+
+	// Start the playback and wait for the result
+	go p.waitForStreamCompletion(ctx, stream, errChan)
+
+	var streamErr error
+	// Wait for playback to complete or timeout
 	select {
-	case <-done:
-	case <-time.After(1 * time.Second):
+	case err := <-errChan: // Receive any error from the channel
+		if err != nil {
+			streamErr = fmt.Errorf("playback error for %s: %w", name, err)
+		}
+	case <-ctx.Done(): // Timeout or cancellation case
+		stream.Stop()
+		if err := stream.Error(); err != nil {
+			streamErr = fmt.Errorf("playback timedout with error: %w", err)
+		}
 	}
-
-	stream.Drain()
-
-	// Reset the audio stream to the beginning for future playback
-	if _, err := data.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to reset %s after playing: %w", name, err)
+	close(errChan)
+	if streamErr != nil  {
+		return streamErr
 	}
-
 	return nil
 }
 
@@ -70,4 +81,29 @@ func (p *PulseAudioPlayer) Play(name string) error {
 func (p *PulseAudioPlayer) Close() {
 	p.client.Close()
 	p.sc.Close()
+}
+
+func (p *PulseAudioPlayer) waitForStreamCompletion(ctx context.Context, stream *pulse.PlaybackStream, errChan chan<- error) {
+	go func() {
+		select {
+		case <-ctx.Done(): // Listen for context cancellation or timeout
+			return
+		default:
+			stream.Start()
+
+			// Wait for the stream to finish
+			stream.Drain()
+
+			if stream.Underflow() {
+				log.Printf("Underflow occurred during playback")
+			}
+
+			// Send any stream error or nil (on success) to the error channel
+			if err := stream.Error(); err != nil {
+				errChan <- fmt.Errorf("stream playback error: %w", err)
+			} else {
+				close(errChan) // Close the channel to indicate successful completion
+			}
+		}
+	}()
 }

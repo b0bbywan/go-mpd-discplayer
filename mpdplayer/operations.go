@@ -24,6 +24,10 @@ func (rc *ReconnectingMPDClient) StartUSBPlayback(device string) error {
 	return rc.startPlayback(addUSBToQueue, device)
 }
 
+func (rc *ReconnectingMPDClient) StartPlayback(uri string) error {
+	return rc.startPlayback(addUri, uri)
+}
+
 // StartDiscPlayback now accepts a custom playback function
 func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, device string) error {
 	return rc.execute(func(client *mpd.Client) error {
@@ -158,7 +162,7 @@ func loadCue(client *mpd.Client, cuerConfig *config.Config, device string) error
 // addTracks adds individual CDDA tracks to the MPD playlist based on the specified track count.
 func addTracks(client *mpd.Client, trackCount int) error {
 	for track := 1; track <= trackCount; track++ {
-		if err := client.Add(fmt.Sprintf("%s/%d", CDDAPathPrefix, track)); err != nil {
+		if err := addUri(client, fmt.Sprintf("%s/%d", CDDAPathPrefix, track)); err != nil {
 			return fmt.Errorf("failed to add track %d: %w", track, err)
 		}
 	}
@@ -193,8 +197,12 @@ func addUSBToQueue(client *mpd.Client, label string) error {
 		return fmt.Errorf("Database update failed: %w", err)
 	}
 	log.Printf("Adding %s files to queue...", label)
-	if err := client.Add(label); err != nil {
-		return fmt.Errorf("failed to add files from %s: %w", label, err)
+	return addUri(client, label)
+}
+
+func addUri(client *mpd.Client, uri string) error {
+	if err := client.Add(uri); err != nil {
+		return fmt.Errorf("failed to add uri %s: %w", uri, err)
 	}
 	return nil
 }

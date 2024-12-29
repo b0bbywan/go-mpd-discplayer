@@ -22,7 +22,7 @@ import (
 
 const (
 	AppName          = "mpd-discplayer"
-	AppVersion       = "0.5"
+	AppVersion       = "0.6"
 	defaultMpdFolder = "/var/lib/mpd/music"
 )
 
@@ -35,6 +35,7 @@ type Player struct {
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
 	handlers  []*hwcontrol.EventHandler
+	scheduler *scheduler
 }
 
 func NewPlayer() (*Player, error) {
@@ -49,6 +50,7 @@ func NewPlayer() (*Player, error) {
 	viper.SetDefault("AudioBackend", "pulse")
 	viper.SetDefault("PulseServer", "")
 	viper.SetDefault("MountConfig", "mpd")
+	viper.SetDefault("Schedule", make(map[string]string))
 
 	// Load from configuration file, environment variables, and CLI flags
 	viper.SetConfigName("config")                       // name of config file (without extension)
@@ -112,6 +114,9 @@ func NewPlayer() (*Player, error) {
 	)
 	notifier := notifications.NewNotifier(notificationConfig)
 
+	schedules := newSchedulerUris(mpdClient, notifier, viper.GetStringMapString("Schedule"))
+	scheduler := newScheduler(schedules)
+
 	return &Player{
 		ctx:       ctx,
 		cancel:    cancel,
@@ -120,10 +125,13 @@ func NewPlayer() (*Player, error) {
 		Client:    mpdClient,
 		Notifier:  notifier,
 		Mounter:   mounter,
+		scheduler: scheduler,
 	}, nil
 }
 
 func (p *Player) Start() {
+	p.StartScheduler()
+
 	// Create event handlers (subscribers) passing the context
 	p.newDiscHandlers()
 	p.newUSBHandlers()
@@ -178,6 +186,9 @@ func (p *Player) Close() {
 	}
 	if p.Notifier != nil {
 		p.Notifier.Close()
+	}
+	if p.scheduler != nil {
+		p.scheduler.Close()
 	}
 	p.wg.Wait()
 }

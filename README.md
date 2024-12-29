@@ -2,18 +2,15 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/b0bbywan/go-mpd-discplayer.svg)](https://pkg.go.dev/github.com/b0bbywan/go-mpd-discplayer)
 
-`mpd-discplayer` is a Go-based client designed for seamless disc playback with an MPD (Music Player Daemon) server. It automatically handles disconnections and uses [go-disc-cuer](https://github.com/b0bbywan/go-disc-cuer/) to generate CUE files for inserted audio discs.
-
+`mpd-discplayer` is a Go-based client designed for seamless integration with MPD (Music Player Daemon). It automates disc and USB playback by generating CUE files for audio discs and managing removable media. It also handles disconnections gracefully and provides configurable audio notifications.
 
 ## Features
 
-- **Audio Disc Playback Automation**: Monitors for inserted audio discs and generates CUE files using go-disc-cuer before playing on mpd server
-- **USB Stick Playback Automation**: Monitors removable usb media to play them on mpd.server
-- **Reconnection Logic**: Automatically reconnects to the MPD server if the connection is lost.
-- **Reliable Connection Management**: Thread-safe operations to manage MPD client connections and operations.
-- **Configurable Settings**: Supports configuration via a unified config file or environment variables.
-- **Audio Notifications**: Audio notifications are triggered on device insertion and removal, and critical errors encountered while processing those events
-
+- **Automated Audio Disc Playback:** Detects and plays inserted audio discs using `go-disc-cuer` for CUE file generation.
+- **USB Media Playback:** Monitors removable USB drives and plays media files on the MPD server.
+- **Robust Reconnection Logic:** Automatically reconnects to the MPD server if the connection is lost.
+- **Flexible Configuration:** Supports configuration via YAML files or environment variables.
+- **Audio Notifications:** Plays sound notifications for device events (insertion, removal) and critical errors.
 
 ## Installation
 
@@ -26,14 +23,27 @@ git clone https://github.com/b0bbywan/go-mpd-discplayer.git
 cd go-mpd-discplayer
 ```
 
-### Install dependencies
-Ensure libgudev and libdiscid are installed. Run the following commands based on your OS:
+### Install Prerequisites
+Additional libraries are required at runtime. Dev libraries are required only to compile the project. Run the following commands based on your OS:
 
 ```bash
 # Debian
-sudo apt install libdiscid0 libdiscid-dev libgudev-1.0-0 libgudev-1.0-dev libasound2-dev
+sudo apt install \
+	libcdparanoia0 \
+	libdiscid0 \
+	libgudev-1.0-0 \
+	libdiscid-dev \
+	libgudev-1.0-dev \
+	libasound2-dev
+
 # Fedora
-sudo dnf install libdiscid libdiscid-devel libgudev libgudev-devel alsa-lib-devel
+sudo dnf install \
+	cdparanoia-libs \
+	libdiscid \
+	libgudev \
+	libdiscid-devel \
+	libgudev-devel \
+	alsa-lib-devel
 ```
 
 ### Build the Project
@@ -41,20 +51,71 @@ sudo dnf install libdiscid libdiscid-devel libgudev libgudev-devel alsa-lib-deve
 go build -o mpd-discplayer
 ```
 
-
 ## Usage
 
-Simply run the program. mpd-discplayer will:
-
-- Monitor the system for an audio disc or USB stick insertion.
-- Automatically use go-disc-cuer to generate a CUE file for inserted audio disc.
-- Play the disc or USB on the MPD server.
-- Trigger audio notifications on device insertion and removal, and errors.
+Once installed, `mpd-discplayer` automatically detects devices and interacts with the MPD server. Run the following command to start:
 
 ```bash
 ./mpd-discplayer
 ```
 
+### Using Systemd (Optional)
+To run mpd-discplayer as a systemd service:
+
+```bash
+sudo cp share/mpd-discplayer.service /usr/lib/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable mpd-discplayer # enable on user login
+systemctl --user start mpd-discplayer
+```
+
+## MPD Configuration
+- To enable MPD-Discplayer some configuration is necessary :
+	- It's recommended to run mpd and mpd-discplayer with the same user:
+		- MPD-Discplayer needs to be able to write in MPD music_directory (at least in `MPDCueSubfolder`  for cue file storage and `MPDUSBSubfolder` for `symlink` mounting.
+		- MPD also needs to be able to read files and directories created by MPD-Discplayer
+	- **Disc Plyback**:
+		- `input { plugin "cdio_paranoia" }`: allow MPD to play audio disc
+		- `playlist_plugin { name "cue" enabled "true" as_folder "true" }`: allow audio disc covers display in MPD clients
+	- **USB Playback**: Those settings are only necessary if using `mpd` mounting, `symlink` mounting doesn't need it.
+		- `neighbors { plugin "udisks" }`: Enable udisk mounting MPD feature
+		- `database { plugin "simple" path "~/.local/share/mpd/db" cache_directory "~/.local/share/mpd/cache" }`: Mandatory with neighbors plugins. Old `db_file` setting won't work with neighbors plugins
+
+```
+# Database #######################################################################
+#
+database {
+	plugin "simple"
+	path "~/.local/share/mpd/db"
+	cache_directory "~/.local/share/mpd/cache"
+}
+
+# Input #######################################################################
+#
+input {
+	plugin	"cdio_paranoia"
+}
+#
+###############################################################################
+
+# Neighbors ###################################################################
+#
+neighbors {
+	plugin "udisks"
+}
+#
+# #############################################################################
+
+# Playlist Plugin #############################################################
+#
+playlist_plugin {
+	name "cue"
+	enabled "true"
+	as_folder "true"
+}
+#
+###############################################################################
+```
 
 ## Configuration
 
@@ -82,6 +143,9 @@ DiscSpeed: 12
 SoundsLocation: "/usr/local/share/mpd-discplayer"
 AudioBackend: "pulse"
 PulseServer: ""
+MountConfig: "mpd"
+MPDCueSubfolder: ".disc-cuer"
+MPDUSBSubfolder: ".udisks"
 
 ```
 
@@ -90,11 +154,12 @@ Under the MPDConnection key, you configure how mpd-discplayer connects to the MP
 
 - **Type**:
 The type of connection to use. Supported values:
-	- `"unix"`: For a Unix socket connection.
+	- `"unix"`: For a Unix socket connection *(recommended as it enables MPD music_directory self discovery to set the directory for cue file and USB symlink mounting)*
 	- `"tcp"`: For a TCP connection over the network. (default)
+
 - **Address**:
-	- For Type: `"unix"`, this is the path to the MPD socket file (e.g., `/var/run/mpd/socket`).
-	- For Type: `"tcp"`, this is the <hostname>:<port> of the MPD server (e.g., `127.0.0.1:6600`) *(default)*.
+	- For Type: `"unix"`, this is the path to the MPD socket file (e.g., `/var/run/mpd/socket` ) *(recommended)*.
+	- For Type: `"tcp"`, this is the <hostname>:<port> of the MPD server (e.g., `127.0.0.1:6600`) *(default)*. *(Even though remote MPD server are supported, they won't work without additional setup not covered in this documentation)*
 
 
 #### Notifications Options
@@ -102,6 +167,13 @@ The type of connection to use. Supported values:
 - **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
 - **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.mp3`, `out.mp3` and `error.mp3` to be present in the specified folder or notifications will be disabled.
 
+#### Mouting Options
+For USB stick support, the content of the stick must be made available in MPD database. MPD-Discplayer supports the native mpd mouting feature, or symlinks for MPD servers that do not support this feature.
+- **MountConfig**:
+	- `mpd`
+	- `symlink`
+- **MPDLibraryFolder**: path to MPD music_directory *(self discovered when using MPD unix socket)*
+- **MPDUSBSubfolder**: path inside `MPDLibraryFolder` to store symlinks to usb original mountpoints. Only with `MountConfig: "symlink"`, not used with `MountConfig: "mpd"`
 
 ### Environment Variables
 
@@ -114,11 +186,13 @@ If a configuration file is not provided, you can use environment variables to se
 | `MPD_DISCPLAYER_MPDCONNECTION_TYPE`         | `MPDConnection.Type` | `tcp`                        |
 | `MPD_DISCPLAYER_MPDCONNECTION_ADDRESS`      | `MPDConnection.Address` | `127.0.0.1:6600`   |
 | `MPD_DISCPLAYER_MPDCONNECTION_RECONNECTWAIT`      | `MPDConnection.ReconnectWait` | `30` (in seconds)          |
-| `MPD_DISCPLAYER_MPDLIBRARYFOLDER` | `MPDLibraryFolder` | `/var/lib/mpd/music`
-| `MPD_DISCPLAYER_DISCSPEED` | `DiscSpeed` | `12`
-| `MPD_DISCPLAYER_SOUNDSLOCATION` | `SoundsLocation` | `/usr/local/share/mpd-discplayer`
-| `MPD_DISCPLAYER_AUDIOBACKEND` | `AudioBackend` | `pulse`
-| `MPD_DISCPLAYER_PULSESERVER` | `PulseServer` | *(Default to "", e.g. local unix socket)*
+| `MPD_DISCPLAYER_MPDLIBRARYFOLDER` | `MPDLibraryFolder` | `/var/lib/mpd/music` |
+| `MPD_DISCPLAYER_DISCSPEED` | `DiscSpeed` | `12` |
+| `MPD_DISCPLAYER_SOUNDSLOCATION` | `SoundsLocation` | `/usr/local/share/mpd-discplayer` |
+| `MPD_DISCPLAYER_AUDIOBACKEND` | `AudioBackend` | `pulse` |
+| `MPD_DISCPLAYER_PULSESERVER` | `PulseServer` | *(Default to `""`, e.g. local pulseaudio unix socket)* | `MPD_DISCPLAYER_MOUNTCONFIG` | `MountConfig` | `mpd`
+| `MPD_DISCPLAYER_MPDCUESUBFOLDER` | `MPDCueSubfolder` | `.disc-cuer` |
+| `MPD_DISCPLAYER_MPDUSBSUBFOLDER` | `MPDUSBSubfolder` | `.udisks`
 
 #### Priority of Configuration
 The configuration is loaded in the following order of priority:

@@ -8,8 +8,8 @@ import (
 
 	"github.com/fhs/gompd/v2/mpd"
 
+	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
-	"github.com/b0bbywan/go-mpd-discplayer/config"
 )
 
 const CDDAPathPrefix = "cdda://"
@@ -17,7 +17,7 @@ const CDDAPathPrefix = "cdda://"
 type PlaybackAction func(client *mpd.Client, device string) error
 
 func (rc *ReconnectingMPDClient) StartDiscPlayback(device string) error {
-	return rc.startPlayback(attemptToLoadCD, device)
+	return rc.startPlayback(rc.attemptToLoadCD, device)
 }
 
 func (rc *ReconnectingMPDClient) StartUSBPlayback(device string) error {
@@ -89,11 +89,27 @@ func (rc *ReconnectingMPDClient) ClearMounts() error {
 	})
 }
 
+func (rc *ReconnectingMPDClient) GetConfig() (string, error) {
+	var config mpd.Attrs
+	var err error
+	if err = rc.execute(func(client *mpd.Client) error {
+		config, err = client.Command("config").Attrs()
+		return err
+	}); err != nil {
+		return "", fmt.Errorf("Failed to get MPD Config from server: %w", err)
+	}
+	musicDirectory, ok := config["music_directory"]
+	if !ok {
+		return "", fmt.Errorf("music_directory not found in config")
+	}
+	return musicDirectory, nil
+}
+
 // attemptToLoadCD tries to load the CD by first attempting to load a CUE file.
 // If loading the CUE file fails, it falls back to loading individual CDDA tracks,
-func attemptToLoadCD(client *mpd.Client, device string) error {
+func (rc *ReconnectingMPDClient) attemptToLoadCD(client *mpd.Client, device string) error {
 	var err error
-	if err = loadCue(client, device); err == nil {
+	if err = loadCue(client, rc.mpcConfig.CuerConfig, device); err == nil {
 		return nil
 	}
 
@@ -124,8 +140,11 @@ func loadCDDATracks(client *mpd.Client, device string) error {
 	return addTracks(client, trackCount)
 }
 
-func loadCue(client *mpd.Client, device string) error {
-	cueFilePath, err := cue.GenerateDefaultFromDisc(device, config.CuerConfig)
+func loadCue(client *mpd.Client, cuerConfig *config.Config, device string) error {
+	if cuerConfig == nil {
+		return fmt.Errorf("No Cuer config to generate from")
+	}
+	cueFilePath, err := cue.GenerateDefaultFromDisc(device, cuerConfig)
 	if err != nil || cueFilePath == "" {
 		return fmt.Errorf("failed to generate CUE file: %w", err)
 	}

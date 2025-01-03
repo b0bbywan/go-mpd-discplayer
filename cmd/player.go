@@ -36,6 +36,7 @@ type Player struct {
 	Mounter   *mounts.MountManager
 	handlers  []*hwcontrol.EventHandler
 	scheduler *scheduler
+	btAgent   *hwcontrol.Agent
 }
 
 func NewPlayer() (*Player, error) {
@@ -117,6 +118,11 @@ func NewPlayer() (*Player, error) {
 	schedules := newSchedulerUris(mpdClient, notifier, viper.GetStringMapString("Schedule"))
 	scheduler := newScheduler(schedules)
 
+	btAgent, err := hwcontrol.NewBluetoothAgent()
+	if err != nil {
+		log.Printf("failed to set NewBluetoothAgent: %v", err)
+	}
+
 	return &Player{
 		ctx:       ctx,
 		cancel:    cancel,
@@ -126,6 +132,7 @@ func NewPlayer() (*Player, error) {
 		Notifier:  notifier,
 		Mounter:   mounter,
 		scheduler: scheduler,
+		btAgent:   btAgent,
 	}, nil
 }
 

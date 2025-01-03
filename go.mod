@@ -17,6 +17,7 @@ require (
 require (
 	github.com/ebitengine/purego v0.4.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect

@@ -64,13 +64,32 @@ func NewBluetoothAgent() (*Agent, error) {
 	conn.Export(introspect.NewIntrospectable(node), agentPath, "org.freedesktop.DBus.Introspectable")
 
 	obj := conn.Object(busName, adapterPath)
-	props := map[string]interface{}{
+/*	props := map[string]interface{}{
 		"Name":                 "CustomA2DPSink",
 		"Role":                 "server",
 		"RequireAuthentication": true,
 		"RequireAuthorization":  true,
 	}
+*/
+/*	if err = obj.Call(busPropertyName, 0,
+		adapterInterface,
+		"sspmode",
+		dbus.MakeVariant(false),
+	).Store(); err != nil {
+		return nil, fmt.Errorf("Failed to set SSP property: %w", err)
+	}
+*/
 	if err = obj.Call(busPropertyName, 0,
+		adapterInterface,
+		"Class",
+		dbus.MakeVariant(uint32(0x240428)),
+	).Store(); err != nil {
+		log.Printf("Failed to set Class property: %v", err)
+	} else {
+		log.Println("Class property set successfully!")
+	}
+
+	if err := obj.Call(busPropertyName, 0,
 		adapterInterface,
 		"DiscoverableTimeout",
 		dbus.MakeVariant(uint32(0)),
@@ -87,7 +106,7 @@ func NewBluetoothAgent() (*Agent, error) {
 	log.Println("RPi speaker discoverable")
 
 	manager := conn.Object(busName, "/org/bluez")
-	if err = manager.Call("org.bluez.ProfileManager1.RegisterProfile", 0,
+/*	if err = manager.Call("org.bluez.ProfileManager1.RegisterProfile", 0,
 		dbus.ObjectPath("/custom/profile"),
 		"0000110b-0000-1000-8000-00805f9b34fb",
 		props,
@@ -95,7 +114,7 @@ func NewBluetoothAgent() (*Agent, error) {
 		return nil, fmt.Errorf("Failed to register profile: %v", err)
 	}
 	log.Printf("profile registered")
-	if err = manager.Call("org.bluez.AgentManager1.RegisterAgent", 0,
+*/	if err = manager.Call("org.bluez.AgentManager1.RegisterAgent", 0,
 		dbus.ObjectPath(agentPath),
 		"NoInputNoOutput",
 	).Store(); err != nil {

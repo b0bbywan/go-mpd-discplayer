@@ -10,11 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jochenvg/go-udev"
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
@@ -34,8 +33,8 @@ type Player struct {
 	Client    *mpdplayer.ReconnectingMPDClient
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
-	handlers  []*hwcontrol.EventHandler
 	scheduler *scheduler
+	handlers  []Handler
 }
 
 func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) {
@@ -131,51 +130,64 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 func (p *Player) Start() {
 	p.StartScheduler()
 
-	// Create event handlers (subscribers) passing the context
-	p.newDiscHandlers()
-	p.newUSBHandlers()
+	p.newDiscHandler()
+	p.newUSBHandler()
 
-	for _, handler := range p.handlers {
-		handler.StartSubscriber(p.wg, p.ctx)
-	}
+	detector := detect.NewUdevDetector()
+	events := make(chan detect.DeviceEvent)
+
 	p.wg.Add(1)
-	go p.run()
+	go func() {
+		defer p.wg.Done()
+		defer close(events)
+		if err := detector.Run(p.ctx, events); err != nil {
+			log.Printf("Failed to run udev detector: %s", err)
+			p.cancel()
+		}
+	}()
+
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.run(events)
+	}()
 }
 
-func (p *Player) run() {
-	defer p.wg.Done()
+func (p *Player) run(events <-chan detect.DeviceEvent) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			log.Println("Stopping from cmd.")
+			log.Println("ending dispatch")
 			return
-		default:
-			if err := hwcontrol.StartMonitor(p.ctx, p.handlers); err != nil {
-				log.Printf("Error starting monitor: %w\n", err)
-				time.Sleep(time.Second) // Retry after some delay
-				continue
+		case ev, ok := <-events:
+			if !ok {
+				log.Println("event channel closed, exiting")
+				return
 			}
+			p.dispatch(ev)
 		}
 	}
 }
 
-func (p *Player) SetHandlerProcessor(
-	handler *hwcontrol.EventHandler,
-	callback func(device *udev.Device) error,
-	logMessage, eventName string,
-) {
-	handler.SetProcessor(
-		p.wg,
-		logMessage,
-		callback,
-		p.Notifier,
-		eventName,
-	)
-	p.AddHandler(handler)
-}
-
-func (p *Player) AddHandler(handlers ...*hwcontrol.EventHandler) {
-	p.handlers = append(p.handlers, handlers...)
+func (p *Player) dispatch(ev detect.DeviceEvent) {
+	var err error
+	for _, h := range p.handlers {
+		if !h.Handles(ev.Device.Kind()) {
+			continue
+		}
+		switch ev.Type {
+		case detect.DeviceAdded:
+			p.NotifyEvent(notifications.EventAdd)
+			err = h.OnAdd(p.ctx, ev.Device)
+		case detect.DeviceRemoved:
+			p.NotifyEvent(notifications.EventRemove)
+			err = h.OnRemove(p.ctx, ev.Device)
+		}
+		if err != nil {
+			p.NotifyEvent(notifications.EventError)
+			log.Printf("[dispatcher] Error during callback execution %s %s: %s", ev.Type, ev.Device.Kind(), err)
+		}
+	}
 }
 
 func (p *Player) Close() {
@@ -190,10 +202,6 @@ func (p *Player) Close() {
 		p.scheduler.Close()
 	}
 	p.wg.Wait()
-}
-
-func (p *Player) GetDiscSpeed() int {
-	return p.discSpeed
 }
 
 func (p *Player) NotifyEvent(name string) {

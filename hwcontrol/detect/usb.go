@@ -1,4 +1,4 @@
-package hwcontrol
+package detect
 
 import (
 	"log"
@@ -8,23 +8,32 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 )
 
-func NewBasicUSBHandlers() []*EventHandler {
-	addHandler := newBasicUSBHandler("addUSB", onAddUSBChecker)
-	removeHandler := newBasicUSBHandler("removeUSB", onRemoveUSBChecker)
-
-	return []*EventHandler{addHandler, removeHandler}
+type USBDevice struct {
+	path string
+	udev *udev.Device
 }
 
-func newBasicUSBHandler(name string, actionChecker func(*udev.Device, string) bool) *EventHandler {
-	return newBasicHandler(
-		name,
-		func(device *udev.Device) bool {
-			return usbPreChecker(device)
-		},
-		func(device *udev.Device, action string) bool {
-			return actionChecker(device, action)
-		},
-	)
+func (d *USBDevice) Path() string {
+	return d.path
+}
+
+func (d *USBDevice) Kind() DeviceKind {
+	return DeviceUSB
+}
+
+func (d *USBDevice) Udev() *udev.Device {
+	return d.udev
+}
+
+func (d *USBDevice) DetectEvent() EventType {
+	action := d.Udev().Action()
+	if onRemoveUSBChecker(d.Udev(), action) {
+		return DeviceRemoved
+	}
+	if onAddUSBChecker(d.Udev(), action) {
+		return DeviceAdded
+	}
+	return InvalidEvent
 }
 
 func onRemoveUSBChecker(device *udev.Device, action string) bool {

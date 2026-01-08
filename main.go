@@ -18,7 +18,14 @@ func main() {
 	playFlag := flag.Bool(cmd.ActionPlay, false, "Start playback immediately")
 	stopFlag := flag.Bool(cmd.ActionStop, false, "Stop playback immediately")
 	deviceFlag := flag.String("device", "/dev/sr0", "Disc Device")
+	versionFlag := flag.Bool("version", false, "Print version")
+
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("%s v%s\n", cmd.AppName, cmd.AppVersion)
+		return
+	}
 
 	if *playFlag && *stopFlag {
 		flag.Usage()

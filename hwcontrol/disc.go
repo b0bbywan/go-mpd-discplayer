@@ -22,14 +22,14 @@ func SetDiscSpeed(device string, speed int) error {
 
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			log.Printf("failed to close device file: %w", closeErr)
+			log.Printf("failed to close device file: %s", closeErr)
 		}
 	}()
 
 	// Perform the ioctl call
 	err = unix.IoctlSetInt(int(file.Fd()), CDROM_SET_SPEED, speed)
 	if err != nil {
-		log.Printf("failed to set speed: %w", err)
+		log.Printf("failed to set speed: %s", err)
 		return fmt.Errorf("failed to set speed: %w", err)
 	}
 

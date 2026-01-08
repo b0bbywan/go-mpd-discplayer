@@ -38,7 +38,7 @@ type Player struct {
 	scheduler *scheduler
 }
 
-func NewPlayer() (*Player, error) {
+func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) {
 	viper.SetDefault("MPDConnection.Type", "tcp")
 	viper.SetDefault("MPDConnection.Address", "127.0.0.1:6600")
 	viper.SetDefault("MPDConnection.ReconnectWait", 30)
@@ -71,7 +71,6 @@ func NewPlayer() (*Player, error) {
 			return nil, fmt.Errorf("Error reading config file: %w", err)
 		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	mpdConnection, err := mpdplayer.NewMPDConnection(

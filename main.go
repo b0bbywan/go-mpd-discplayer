@@ -33,9 +33,8 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go signalMonitor(ctx, cancel)
 
-	player, err := cmd.NewPlayer()
+	player, err := cmd.NewPlayer(ctx, cancel)
 	if err != nil {
 		log.Fatalf("Failed to create player: %v", err)
 	}
@@ -54,6 +53,8 @@ func main() {
 		}
 		return
 	}
+
+	go signalMonitor(ctx, cancel)
 
 	// Default behavior
 	player.Start()
@@ -77,9 +78,12 @@ func signalMonitor(ctx context.Context, cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
-	for range sigChan {
+
+	select {
+	case <-sigChan:
 		log.Println("Received termination signal. Exiting...")
 		cancel()
-		return
+	case <-ctx.Done():
+		log.Println("Received context signal. Exiting...")
 	}
 }

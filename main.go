@@ -28,7 +28,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go signalMonitor(ctx, cancel)
 
-	player, err := cmd.NewPlayer()
+	player, err := cmd.NewPlayer(ctx, cancel)
 	if err != nil {
 		log.Fatalf("Failed to create player: %v", err)
 	}

@@ -1,50 +1,41 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/jochenvg/go-udev"
-
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
-	"github.com/b0bbywan/go-mpd-discplayer/notifications"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 )
 
-func (player *Player) newUSBHandlers() {
-	handlers := hwcontrol.NewBasicUSBHandlers()
-	//TODO check mounter nil
-	startUSBPlayback := func(device *udev.Device) error {
-		relPath, err := player.Mounter.Mount(device)
-		if err != nil {
-			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[0].Name(), device.Devnode(), err)
-		}
-		if err = player.Client.StartUSBPlayback(relPath); err != nil {
-			return fmt.Errorf("[%s] Error starting %s:%s USB playback: %w", handlers[0].Name(), device.Devnode(), relPath, err)
-		}
-		return nil
-	}
+func (player *Player) newUSBHandler() {
+    usbHandler := hwcontrol.NewBasicHandler(
+        "usb",
+        detect.DeviceUSB,
+        // processAdd
+        func(ctx context.Context, dev detect.Device) error {
+			relPath, err := player.Mounter.Mount(dev.Udev())
+			if err != nil {
+				return fmt.Errorf("[usb] Error getting mount point for %s: %w", dev.Path(), err)
+			}
+			if err = player.Client.StartUSBPlayback(relPath); err != nil {
+				return fmt.Errorf("[usb] Error starting %s:%s USB playback: %w", dev.Path(), relPath, err)
+			}
+			return nil
+        },
+        // processRemove
+        func(ctx context.Context, dev detect.Device) error {
+			relPath, err := player.Mounter.Unmount(dev.Udev())
+			if err != nil {
+				return fmt.Errorf("[usb] Error getting mount point for %s: %w", dev.Path(), err)
+			}
+			if err = player.Client.StopPlayback(relPath); err != nil {
+				return fmt.Errorf("[usb] Error stopping %s USB playback: %w", dev.Path(), err)
+			}
+			return nil
+		},
+    )
 
-	stopUSBPlayback := func(device *udev.Device) error {
-		relPath, err := player.Mounter.Unmount(device)
-		if err != nil {
-			return fmt.Errorf("[%s] Error getting mount point for %s: %w", handlers[1].Name(), device.Devnode(), err)
-		}
-		if err = player.Client.StopPlayback(relPath); err != nil {
-			return fmt.Errorf("[%s] Error stopping %s USB playback: %w", handlers[1].Name(), device.Devnode(), err)
-		}
-		return nil
-	}
-
-	player.SetHandlerProcessor(
-		handlers[0],
-		startUSBPlayback,
-		"Starting USB playback",
-		notifications.EventAdd,
-	)
-
-	player.SetHandlerProcessor(
-		handlers[1],
-		stopUSBPlayback,
-		"Stopping USB playback",
-		notifications.EventRemove,
-	)
+    // Stocker le handler dans Player
+    player.handlers = append(player.handlers, usbHandler)
 }

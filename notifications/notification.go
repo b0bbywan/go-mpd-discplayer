@@ -72,7 +72,9 @@ func NewNotifier(config *NotificationConfig) *Notifier {
 }
 
 func (n *Notifier) PlayEvent(event string) {
-	n.play(event)
+	if n != nil {
+		n.play(event)
+	}
 }
 
 func (n *Notifier) PlayError() {

@@ -25,6 +25,4 @@ func (player *Player) ExecuteAction(device, action string) error {
 	default:
 		return fmt.Errorf("Unknown action: %s", action)
 	}
-
-	return nil
 }

@@ -1,47 +1,37 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 
-	"github.com/jochenvg/go-udev"
-
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
-	"github.com/b0bbywan/go-mpd-discplayer/notifications"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 )
 
-func (player *Player) newDiscHandlers() {
-	// Use VeryNewBasicDiscHandler to create the event handlers
-	handlers := hwcontrol.NewBasicDiscHandlers()
+func (player *Player) newDiscHandler() {
+    discHandler := hwcontrol.NewBasicHandler(
+        "disc",
+        detect.DeviceDisc,
+        // processAdd
+        func(ctx context.Context, dev detect.Device) error {
+            if err := hwcontrol.SetDiscSpeed(dev.Path(), player.GetDiscSpeed()); err != nil {
+                log.Printf("[disc] Error setting disc speed on %s: %v", dev.Path(), err)
+            }
+            if err := player.Client.StartDiscPlayback(dev.Path()); err != nil {
+                return fmt.Errorf("[disc] Error starting %s playback: %w", dev.Path(), err)
+            }
+            return nil
+        },
+        // processRemove
+        func(ctx context.Context, dev detect.Device) error {
+            if err := player.Client.StopDiscPlayback(); err != nil {
+                return fmt.Errorf("[disc] Error stopping %s playback: %w", dev.Path(), err)
+            }
+            return nil
+        },
+    )
 
-	startDiscPlayback := func(device *udev.Device) error {
-		if err := hwcontrol.SetDiscSpeed(device.Devnode(), player.GetDiscSpeed()); err != nil {
-			log.Printf("[%s] Error setting disc speed on %s: %v", handlers[0].Name(), device.Devnode(), err)
-		}
-		if err := player.Client.StartDiscPlayback(device.Devnode()); err != nil {
-			return fmt.Errorf("[%s] Error starting %s playback: %w", handlers[0].Name(), device.Devnode(), err)
-		}
-		return nil
-	}
-
-	stopDiscPlayback := func(device *udev.Device) error {
-		if err := player.Client.StopDiscPlayback(); err != nil {
-			return fmt.Errorf("[%s] Error stopping %s playback: %w", handlers[0].Name(), device.Devnode(), err)
-		}
-		return nil
-	}
-
-	player.SetHandlerProcessor(
-		handlers[0],
-		startDiscPlayback,
-		"Starting Disc Playback",
-		notifications.EventAdd,
-	)
-
-	player.SetHandlerProcessor(
-		handlers[1],
-		stopDiscPlayback,
-		"Stopping Disc Playback",
-		notifications.EventRemove,
-	)
+    // Stocker le handler dans Player
+    player.handlers = append(player.handlers, discHandler)
 }

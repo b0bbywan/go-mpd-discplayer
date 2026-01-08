@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -35,7 +34,7 @@ type Player struct {
 	Notifier  *notifications.Notifier
 	Mounter   *mounts.MountManager
 	scheduler *scheduler
-	handlers  []hwcontrol.Handler
+	handlers  []Handler
 }
 
 func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) {

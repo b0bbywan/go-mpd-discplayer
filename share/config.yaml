@@ -1,0 +1,62 @@
+# MPD Disc Player Configuration
+# Copy this file to ~/.config/mpd-discplayer/config.yml to use it
+
+# GNUdb configuration (optional)
+# Allows fetching audio CD metadata from GNUdb
+#gnuHelloEmail: "you@example.com"
+#gnuDbUrl: "http://gnudb.gnudb.org"
+
+# MPD connection configuration
+MPDConnection:
+  # Connection type: "unix" (recommended) or "tcp"
+  Type: "unix"
+
+  # Connection address:
+  # - For "unix": path to MPD socket (e.g., /run/user/1000/mpd/socket)
+  # - For "tcp": IP address:port (e.g., 127.0.0.1:6600)
+  Address: "/run/user/1000/mpd/socket"
+
+  # Reconnection delay in seconds if MPD connection is lost
+  ReconnectWait: 5
+
+# MPD library folder
+# Auto-detected when Type: "unix", otherwise specify the path
+#MPDLibraryFolder: "/var/lib/mpd/music"
+
+# USB mount configuration
+# "mpd": uses MPD's native mounting system (recommended)
+# "symlink": creates symbolic links in MPDLibraryFolder
+MountConfig: "mpd"
+
+# Subfolder for audio CD CUE files (relative to MPDLibraryFolder)
+#MPDCueSubfolder: ".disc-cuer"
+
+# Subfolder for USB symlinks (only with MountConfig: "symlink")
+#MPDUSBSubfolder: ".udisks"
+
+# CD read speed (1-12, default: 12)
+#DiscSpeed: 12
+
+# Audio backend for notifications
+# "pulse": PulseAudio (default)
+# "alsa": ALSA direct
+# "none": disable sound notifications
+#AudioBackend: "pulse"
+
+# PulseAudio server (optional, empty = local socket by default)
+#PulseServer: ""
+
+# Notification sounds location (in.mp3, out.mp3, error.mp3)
+#SoundsLocation: "/usr/local/share/mpd-discplayer"
+
+# Scheduled playback (cron format)
+# Examples:
+#Schedule:
+#  # Reggae radio Monday to Friday at 6:30 AM
+#  "30 6 * * 1-5": "http://hd.lagrosseradio.info/lagrosseradio-reggae-192.mp3"
+#
+#  # Audio CD on Saturday at 9:00 AM
+#  "0 9 * * 6": "cdda://"
+#
+#  # USB drive on Sunday at 9:00 PM
+#  "0 21 * * 7": ".udisks/{usb_label}"

@@ -7,7 +7,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/mpd-discplayer
+ExecStart=/usr/bin/mpd-discplayer
 Restart=always
 RestartSec=12
 TimeoutSec=30

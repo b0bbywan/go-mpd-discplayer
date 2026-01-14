@@ -3,7 +3,7 @@ package notifications
 import (
 	"fmt"
 	"io"
-	"time"
+	"log"
 
 	"github.com/jfreymuth/pulse"
 	"github.com/jfreymuth/pulse/proto"
@@ -45,24 +45,16 @@ func (p *PulseAudioPlayer) Play(name string) error {
 	defer p.sc.mu.Unlock()
 
 	// Start the stream and wait for it to finish
-	done := make(chan struct{})
-	go func() {
-		stream.Start()
-		done <- struct{}{}
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(1 * time.Second):
-	}
-
+	stream.Start()
 	stream.Drain()
+	if stream.Underflow() {
+		log.Println("Audio stream underflow detected")
+	}
 
 	// Reset the audio stream to the beginning for future playback
 	if _, err := data.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("failed to reset %s after playing: %w", name, err)
 	}
-
 	return nil
 }
 

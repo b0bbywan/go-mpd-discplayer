@@ -98,11 +98,12 @@ func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string,
 }
 
 func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, error) {
-	mountPoint, err := m.findMountPointWithRetry(device.Devnode(), RetryTimeout, RetryInterval)
+	devnode := device.Devnode()
+	mountPoint, err := m.findMountPointWithRetry(devnode, RetryTimeout, RetryInterval)
 	if err != nil && m.config.Method != "mpd" {
-		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", device, err)
+		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", devnode, err)
 	}
-	m.mountPoints.AddCache(device.Devnode(), mountPoint)
+	m.mountPoints.AddCache(devnode, mountPoint)
 
 	if strings.HasPrefix(mountPoint, m.config.MPDLibraryFolder) {
 		return mountPoint, nil

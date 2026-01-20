@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -10,13 +11,13 @@ import (
 )
 
 type SoundEntry struct {
-	decoder *mp3.Decoder
-	file    *os.File
+	Data       []byte
+	SampleRate int
 }
 
 type SoundCache struct {
-	sounds map[string]*SoundEntry // Preloaded audio data
-	mu     sync.Mutex
+	sounds map[string]*SoundEntry
+	mu     sync.RWMutex // RWMutex pour permettre des lectures concurrentes
 }
 
 func NewSoundCache(soundsPath map[string]string) (*SoundCache, error) {
@@ -29,32 +30,31 @@ func NewSoundCache(soundsPath map[string]string) (*SoundCache, error) {
 		if err := sc.loadAudioFile(name, path); err != nil {
 			return nil, fmt.Errorf("failed to load sound %s from %s: %w", name, path, err)
 		}
+		log.Printf("Loaded sound: %s (%d bytes, %d Hz)", name, len(sc.sounds[name].Data), sc.sounds[name].SampleRate)
 	}
 
 	return sc, nil
 }
 
-func (sc *SoundCache) Get(name string) (*mp3.Decoder, error) {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
+func (sc *SoundCache) Get(name string) (*SoundEntry, error) {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
 
-	data, exists := sc.sounds[name]
+	entry, exists := sc.sounds[name]
 	if !exists {
 		return nil, fmt.Errorf("sound %s not found", name)
 	}
-	return data.decoder, nil
+
+	return entry, nil
 }
 
 func (sc *SoundCache) Close() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	for name, entry := range sc.sounds {
-		if err := entry.file.Close(); err != nil {
-			log.Printf("failed to close file for sound %s: %v\n", name, err)
-		}
-	}
-	sc.sounds = nil // Clear the map for garbage collection
+	// Plus besoin de fermer les fichiers, tout est en mémoire
+	sc.sounds = nil
+	log.Println("SoundCache closed")
 }
 
 func (sc *SoundCache) loadAudioFile(name, path string) error {
@@ -62,18 +62,27 @@ func (sc *SoundCache) loadAudioFile(name, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", path, err)
 	}
+	defer file.Close() // On ferme tout de suite après avoir lu
 
-	decodedMp3, err := mp3.NewDecoder(file)
+	decoder, err := mp3.NewDecoder(file)
 	if err != nil {
 		return fmt.Errorf("failed to decode MP3 file: %w", err)
 	}
-	data := &SoundEntry{
-		decoder: decodedMp3,
-		file:    file,
+
+	// Décoder tout le MP3 en mémoire
+	data, err := io.ReadAll(decoder)
+	if err != nil {
+		return fmt.Errorf("failed to read decoded MP3 data: %w", err)
 	}
+
+	entry := &SoundEntry{
+		Data:       data,
+		SampleRate: decoder.SampleRate(),
+	}
+
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+	sc.sounds[name] = entry
 
-	sc.sounds[name] = data
 	return nil
 }

@@ -1,8 +1,8 @@
 package notifications
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"log"
 
 	"github.com/jfreymuth/pulse"
@@ -29,20 +29,17 @@ func NewPulseAudioPlayer(sc *SoundCache, pulseServerString string) (*PulseAudioP
 
 // Play plays the sound corresponding to the given name.
 func (p *PulseAudioPlayer) Play(name string) error {
-	data, err := p.sc.Get(name)
+	sound, err := p.sc.Get(name)
 	if err != nil {
 		return fmt.Errorf("Could not play %s: %w", name, err)
 	}
 
-	p.sc.mu.Lock()
-	buf := make([]byte, data.Len())
-	if _, err := data.Read(buf); err != nil {
-		p.sc.mu.Unlock()
-		return fmt.Errorf("failed to read sound data: %w", err)
-	}
-	p.sc.mu.Unlock()
+	// Créer un reader depuis les données en cache
+	reader := pulse.NewReader(
+		bytes.NewReader(sound.Data),
+		proto.FormatInt16LE,
+	)
 
-	reader := pulse.NewReader(bytes.NewReader(buf), proto.FormatInt16LE)
 	// Use PulseAudio's NewPlayback with the sound data as a reader
 	stream, err := p.client.NewPlayback(
 		reader,
@@ -62,10 +59,6 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		log.Println("Audio stream underflow detected")
 	}
 
-	// Reset the audio stream to the beginning for future playback
-	if _, err := data.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to reset %s after playing: %w", name, err)
-	}
 	return nil
 }
 

@@ -34,15 +34,26 @@ func (p *PulseAudioPlayer) Play(name string) error {
 		return fmt.Errorf("Could not play %s: %w", name, err)
 	}
 
-	reader := pulse.NewReader(data, proto.FormatInt16LE)
+	p.sc.mu.Lock()
+	buf := make([]byte, data.Len())
+	if _, err := data.Read(buf); err != nil {
+		p.sc.mu.Unlock()
+		return fmt.Errorf("failed to read sound data: %w", err)
+	}
+	p.sc.mu.Unlock()
+
+	reader := pulse.NewReader(bytes.NewReader(buf), proto.FormatInt16LE)
 	// Use PulseAudio's NewPlayback with the sound data as a reader
-	stream, err := p.client.NewPlayback(reader, pulse.PlaybackStereo)
+	stream, err := p.client.NewPlayback(
+		reader,
+		pulse.PlaybackStereo,
+		pulse.PlaybackSampleRate(44100),
+		pulse.PlaybackLatency(0.05),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create PulseAudio playback stream: %w", err)
 	}
 	defer stream.Close()
-	p.sc.mu.Lock() // Ensure no concurrent writes to the stream
-	defer p.sc.mu.Unlock()
 
 	// Start the stream and wait for it to finish
 	stream.Start()

@@ -32,9 +32,9 @@ func NewNotificationConfig(audioBackend, pulseServer, soundsLocation string) *No
 		AudioBackend: audioBackend,
 		PulseServer:  pulseServer,
 		SoundPaths: map[string]string{
-			EventAdd:    filepath.Join(soundsLocation, "in.mp3"),
-			EventRemove: filepath.Join(soundsLocation, "out.mp3"),
-			EventError:  filepath.Join(soundsLocation, "error.mp3"),
+			EventAdd:    filepath.Join(soundsLocation, "in.pcm"),
+			EventRemove: filepath.Join(soundsLocation, "out.pcm"),
+			EventError:  filepath.Join(soundsLocation, "error.pcm"),
 		},
 	}
 }
@@ -88,9 +88,7 @@ func (n *Notifier) Close() {
 }
 
 func (n *Notifier) play(name string) {
-	go func() {
-		if err := n.Play(name); err != nil {
-			log.Printf("Failed to play sound (%s): %v", name, err)
-		}
-	}()
+	if err := n.Play(name); err != nil {
+		log.Printf("Failed to play sound (%s): %v", name, err)
+	}
 }

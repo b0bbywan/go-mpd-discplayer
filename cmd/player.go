@@ -21,7 +21,7 @@ import (
 
 const (
 	AppName          = "mpd-discplayer"
-	AppVersion       = "0.7"
+	AppVersion       = "0.7.1"
 	defaultMpdFolder = "/var/lib/mpd/music"
 )
 

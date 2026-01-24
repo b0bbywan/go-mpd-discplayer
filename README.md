@@ -29,7 +29,8 @@ Additional libraries are required at runtime. Dev libraries are required only to
 ```bash
 # Debian
 sudo apt install \
-	libcdparanoia0 \
+	libcdparanoia0 \ # bookworm
+	libcdio-paranoia2t64 \ # trixie
 	libdiscid0 \
 	libgudev-1.0-0 \
 	libdiscid-dev \
@@ -49,6 +50,11 @@ sudo dnf install \
 ### Build the Project
 ```bash
 go build -o mpd-discplayer
+```
+
+### Build deb package
+```bash
+dpkg-buildpackage -us -uc -b
 ```
 
 ## Usage
@@ -125,8 +131,8 @@ Visit [go-disc-cuer](https://github.com/b0bbywan/go-disc-cuer/) for more informa
 ### Configuration File
 
 The configuration file is expected in one of the following locations:
-1. `/etc/mpd-discplayer/config.yml` (system-wide configuration)
-2. `~/.config/mpd-discplayer/config.yml` (user-specific configuration)
+1. `/etc/mpd-discplayer/config.yaml` (system-wide configuration)
+2. `~/.config/mpd-discplayer/config.yaml` (user-specific configuration)
 
 The file should be written in YAML format, and a sample structure is shown below:
 
@@ -198,7 +204,7 @@ Note: Ensure that the `usb_label` matches the label of the USB device. For audio
 #### Notifications Options
 - **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
 - **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
-- **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.mp3`, `out.mp3` and `error.mp3` to be present in the specified folder or notifications will be disabled.
+- **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.pcm`, `out.pcm` and `error.pcm` to be present in the specified folder or notifications will be disabled.
 
 ### Environment Variables
 

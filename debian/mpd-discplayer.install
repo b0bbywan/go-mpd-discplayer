@@ -1,0 +1,2 @@
+share/config.yaml usr/share/mpd-discplayer/config.yaml
+debian/mpd-discplayer.service usr/lib/systemd/user/

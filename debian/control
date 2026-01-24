@@ -1,0 +1,25 @@
+Source: mpd-discplayer
+Section: sound
+Priority: optional
+Maintainer: Mathieu Réquillart <mathieu.requillart@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-golang,
+               golang-go,
+               libdiscid-dev,
+               libgudev-1.0-dev,
+               libasound2-dev
+Standards-Version: 4.6.0
+Homepage: https://github.com/b0bbywan/go-mpd-discplayer
+
+Package: mpd-discplayer
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         mpd,
+         libcdio-paranoia2t64,
+         libdiscid0,
+         libgudev-1.0-0
+Description: MPD disc player daemon for CD automation
+ A daemon that monitors CD drive status and automatically
+ plays inserted discs via MPD (Music Player Daemon).
+ It also handles USB devices and scheduled playback.

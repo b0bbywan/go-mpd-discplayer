@@ -31,21 +31,15 @@ define build_arch
 	@rm -rf $(DIST_DIR)/tmp-$(1)
 endef
 
-# $(1)=label $(2)=platform $(3)=desc $(4)=deb-arch
-# armv6 keeps native armhf name; armv7 is renamed from armhf → armv7hf
+# $(1)=arch-label $(2)=nfpm-arch
+# Requires binary at dist/mpd-discplayer-$(1) and nfpm in PATH
 define build_deb
 	@mkdir -p $(DIST_DIR)
-	@echo "Building .deb for $(3)..."
-	@docker buildx build \
-		--platform $(2) \
-		--target deb-export \
-		--build-arg VERSION=$(VERSION) \
-		--output type=local,dest=$(DIST_DIR)/tmp-deb-$(1) \
-		-f Dockerfile .
-	@for f in $(DIST_DIR)/tmp-deb-$(1)/*.deb; do \
-		mv "$$f" "$(DIST_DIR)/$$(basename "$$f" | sed 's/_armhf\.deb/_$(4).deb/')"; \
-	done
-	@rm -rf $(DIST_DIR)/tmp-deb-$(1)
+	@echo "Building .deb for $(1) (arch: $(2))..."
+	@NFPM_ARCH=$(2) \
+	 VERSION=$(VERSION) \
+	 BINARY_PATH=$(DIST_DIR)/$(BINARY_NAME)-$(1) \
+	 nfpm package --packager deb --target $(DIST_DIR)/
 endef
 
 .PHONY: build-all
@@ -74,29 +68,30 @@ build-armv7: setup
 	$(call build_arch,armv7,linux/arm/v7,armv7 (RPi 2/3 32-bit))
 
 .PHONY: deb-all
-deb-all: setup
-	$(call build_deb,amd64,linux/amd64,amd64,amd64)
-	$(call build_deb,arm64,linux/arm64,arm64 (RPi 3/4/5 64-bit),arm64)
-	$(call build_deb,armv6,linux/arm/v6,armv6 (RPi 1/Zero),armhf)
-	$(call build_deb,armv7,linux/arm/v7,armv7 (RPi 2/3 32-bit),armv7hf)
+deb-all: build-all
+	$(call build_deb,amd64,amd64)
+	$(call build_deb,arm64,arm64)
+	$(call build_deb,armv6,armhf)
+	$(call build_deb,armv7,armv7hf)
 	@echo "Deb packages in $(DIST_DIR)/"
 	@ls -lh $(DIST_DIR)/*.deb
 
+# Individual deb-* targets require the binary to already exist in dist/
 .PHONY: deb-amd64
-deb-amd64: setup
-	$(call build_deb,amd64,linux/amd64,amd64,amd64)
+deb-amd64:
+	$(call build_deb,amd64,amd64)
 
 .PHONY: deb-arm64
-deb-arm64: setup
-	$(call build_deb,arm64,linux/arm64,arm64 (RPi 3/4/5 64-bit),arm64)
+deb-arm64:
+	$(call build_deb,arm64,arm64)
 
 .PHONY: deb-armv6
-deb-armv6: setup
-	$(call build_deb,armv6,linux/arm/v6,armv6 (RPi 1/Zero),armhf)
+deb-armv6:
+	$(call build_deb,armv6,armhf)
 
 .PHONY: deb-armv7
-deb-armv7: setup
-	$(call build_deb,armv7,linux/arm/v7,armv7 (RPi 2/3 32-bit),armv7hf)
+deb-armv7:
+	$(call build_deb,armv7,armv7hf)
 
 .PHONY: release
 release: build-all
@@ -122,11 +117,11 @@ help:
 	@echo "  make build-arm64    - Build for arm64 only (RPi 3/4/5 64-bit)"
 	@echo "  make build-armv6    - Build for armv6 only (RPi 1/Zero)"
 	@echo "  make build-armv7    - Build for armv7 only (RPi 2/3 32-bit)"
-	@echo "  make deb-all        - Build .deb packages for all architectures"
-	@echo "  make deb-amd64      - Build .deb for amd64 only"
-	@echo "  make deb-arm64      - Build .deb for arm64 only"
-	@echo "  make deb-armv6      - Build .deb for armv6 only (RPi 1/Zero) → _armhf.deb"
-	@echo "  make deb-armv7      - Build .deb for armv7 only (RPi 2/3)    → _armv7hf.deb"
+	@echo "  make deb-all        - Build all binaries then .deb packages for all architectures"
+	@echo "  make deb-amd64      - Build .deb for amd64  (binary must exist in dist/)"
+	@echo "  make deb-arm64      - Build .deb for arm64  (binary must exist in dist/)"
+	@echo "  make deb-armv6      - Build .deb for armv6  (binary must exist in dist/) → armhf"
+	@echo "  make deb-armv7      - Build .deb for armv7  (binary must exist in dist/) → armv7hf"
 	@echo "  make release        - Build all binaries + create tar.gz archives"
 	@echo "  make clean          - Remove dist/ and buildx builder"
 	@echo "  make test-local     - Run tests locally"

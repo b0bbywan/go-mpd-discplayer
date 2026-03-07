@@ -67,27 +67,3 @@ RUN set -eux; \
 # ── Binary export: extracted via --output type=local ─────────────────────────
 FROM scratch AS export
 COPY --from=builder /build/mpd-discplayer /mpd-discplayer
-
-# ── Deb builder (extends binary builder) ─────────────────────────────────────
-FROM builder AS deb-builder
-
-ARG TARGETARCH
-ARG TARGETVARIANT
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    debhelper \
-    dh-golang \
-    && rm -rf /var/lib/apt/lists/*
-
-# --no-check-builddeps: our custom Go satisfies golang-go but isn't an apt package
-RUN set -eux; \
-    if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
-        export GOARM="${TARGETVARIANT#v}"; \
-    fi; \
-    dpkg-buildpackage -b -us -uc --no-check-builddeps; \
-    mkdir -p /deb-output; \
-    mv /mpd-discplayer_*.deb /deb-output/
-
-# ── Deb export: extracted via --output type=local ────────────────────────────
-FROM scratch AS deb-export
-COPY --from=deb-builder /deb-output/ /

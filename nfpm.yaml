@@ -1,0 +1,28 @@
+name: mpd-discplayer
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${VERSION}
+maintainer: "Mathieu Réquillart <mathieu.requillart@gmail.com>"
+description: "MPD disc player daemon for CD and USB automation"
+homepage: "https://github.com/b0bbywan/go-mpd-discplayer"
+license: "MIT"
+
+depends:
+  - mpd
+  - libcdio-paranoia2t64
+  - libdiscid0
+  - libgudev-1.0-0
+
+contents:
+  - src: ${BINARY_PATH}
+    dst: /usr/bin/mpd-discplayer
+    file_info:
+      mode: 0755
+  - src: share/config.yaml
+    dst: /usr/share/mpd-discplayer/config.yaml
+  - src: debian/mpd-discplayer.service
+    dst: /usr/lib/systemd/user/mpd-discplayer.service
+
+scripts:
+  postinstall: debian/postinst
+  preremove: debian/prerm

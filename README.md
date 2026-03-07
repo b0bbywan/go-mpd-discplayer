@@ -56,14 +56,11 @@ git clone https://github.com/b0bbywan/go-mpd-discplayer.git
 cd go-mpd-discplayer
 
 go build -o mpd-discplayer .
-
-# Or build a .deb package
-dpkg-buildpackage -us -uc -b
 ```
 
 #### Cross-compilation (Docker multi-arch)
 
-Requires Docker with buildx and QEMU support.
+Requires Docker with buildx and QEMU support. `.deb` packaging requires [nfpm](https://nfpm.goreleaser.com/).
 
 ```bash
 git clone https://github.com/b0bbywan/go-mpd-discplayer.git
@@ -78,8 +75,9 @@ make build-arm64
 make build-armv6   # Raspberry Pi 1 / Zero
 make build-armv7   # Raspberry Pi 2 / 3 (32-bit)
 
-# Build .deb packages
-make deb-all
+# Build .deb packages (requires nfpm, binaries must exist in dist/)
+make deb-all       # build-all + deb for all architectures
+make deb-armv6     # deb only, binary must already be in dist/
 ```
 
 Binaries are output to `dist/`.

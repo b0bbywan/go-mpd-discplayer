@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Printf("%s v%s\n", cmd.AppName, cmd.AppVersion)
+		fmt.Printf("%s %s\n", cmd.AppName, cmd.AppVersion)
 		return
 	}
 

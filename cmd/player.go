@@ -21,9 +21,10 @@ import (
 
 const (
 	AppName          = "mpd-discplayer"
-	AppVersion       = "0.7.1"
 	defaultMpdFolder = "/var/lib/mpd/music"
 )
+
+var AppVersion = "dev"
 
 type Player struct {
 	ctx       context.Context

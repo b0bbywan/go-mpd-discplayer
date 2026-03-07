@@ -10,7 +10,7 @@ require (
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/spf13/viper v1.19.0
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.41.0
 )
 
 require (

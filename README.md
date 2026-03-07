@@ -14,48 +14,75 @@
 
 ## Installation
 
-To use `mpd-discplayer`, you'll need to have Go installed on your system. If you don’t have Go installed, follow the instructions at [https://golang.org/doc/install](https://golang.org/doc/install).
+### From the apt repository (Debian/Raspberry Pi OS)
 
-### Clone the repository
+```bash
+curl -fsSL https://apt.odio.love/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/odio.gpg
+echo "deb [signed-by=/usr/share/keyrings/odio.gpg] https://apt.odio.love stable main" | sudo tee /etc/apt/sources.list.d/odio.list
+sudo apt update
+sudo apt install mpd-discplayer
+```
+
+### From a release binary
+
+Download the binary for your architecture from the [releases page](https://github.com/b0bbywan/go-mpd-discplayer/releases) and install the required runtime libraries:
+
+```bash
+# Debian Bookworm
+sudo apt install libcdparanoia0 libdiscid0 libgudev-1.0-0
+
+# Debian Trixie / Raspberry Pi OS (latest)
+sudo apt install libcdio-paranoia2t64 libdiscid0 libgudev-1.0-0
+```
+
+### Build from source
+
+#### Native build (on the target machine)
+
+Install the dev libraries first:
+
+```bash
+# Debian
+sudo apt install gcc libdiscid-dev libgudev-1.0-dev libasound2-dev pkg-config
+
+# Fedora
+sudo dnf install gcc libdiscid-devel libgudev-devel alsa-lib-devel pkgconf
+```
+
+Then:
 
 ```bash
 git clone https://github.com/b0bbywan/go-mpd-discplayer.git
 cd go-mpd-discplayer
-```
 
-### Install Prerequisites
-Additional libraries are required at runtime. Dev libraries are required only to compile the project. Run the following commands based on your OS:
+go build -o mpd-discplayer .
 
-```bash
-# Debian
-sudo apt install \
-	libcdparanoia0 \ # bookworm
-	libcdio-paranoia2t64 \ # trixie
-	libdiscid0 \
-	libgudev-1.0-0 \
-	libdiscid-dev \
-	libgudev-1.0-dev \
-	libasound2-dev
-
-# Fedora
-sudo dnf install \
-	cdparanoia-libs \
-	libdiscid \
-	libgudev \
-	libdiscid-devel \
-	libgudev-devel \
-	alsa-lib-devel
-```
-
-### Build the Project
-```bash
-go build -o mpd-discplayer
-```
-
-### Build deb package
-```bash
+# Or build a .deb package
 dpkg-buildpackage -us -uc -b
 ```
+
+#### Cross-compilation (Docker multi-arch)
+
+Requires Docker with buildx and QEMU support.
+
+```bash
+git clone https://github.com/b0bbywan/go-mpd-discplayer.git
+cd go-mpd-discplayer
+make setup
+
+# Build for all architectures (amd64, arm64, armv6, armv7)
+make build-all
+
+# Or for a specific architecture
+make build-arm64
+make build-armv6   # Raspberry Pi 1 / Zero
+make build-armv7   # Raspberry Pi 2 / 3 (32-bit)
+
+# Build .deb packages
+make deb-all
+```
+
+Binaries are output to `dist/`.
 
 ## Usage
 

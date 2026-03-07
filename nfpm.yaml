@@ -14,7 +14,7 @@ depends:
   - libgudev-1.0-0
 
 contents:
-  - src: ${BINARY_PATH}
+  - src: dist/mpd-discplayer
     dst: /usr/bin/mpd-discplayer
     file_info:
       mode: 0755

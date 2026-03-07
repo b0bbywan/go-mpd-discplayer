@@ -1,5 +1,5 @@
 [Unit]
-Description=A daemon to autoplay discs and usb removables through mpd server
+Description=Autoplay discs and usb with mpd
 Documentation=https://github.com/b0bbywan/mpd-discplayer
 Wants=sound.target
 After=sound.target

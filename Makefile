@@ -36,10 +36,9 @@ endef
 define build_deb
 	@mkdir -p $(DIST_DIR)
 	@echo "Building .deb for $(1) (arch: $(2))..."
-	@NFPM_ARCH=$(2) \
-	 VERSION=$(VERSION) \
-	 BINARY_PATH=$(DIST_DIR)/$(BINARY_NAME)-$(1) \
-	 nfpm package --packager deb --target $(DIST_DIR)/
+	@cp $(DIST_DIR)/$(BINARY_NAME)-$(1) $(DIST_DIR)/$(BINARY_NAME)
+	@NFPM_ARCH=$(2) VERSION=$(VERSION) nfpm package --packager deb --target $(DIST_DIR)/
+	@rm $(DIST_DIR)/$(BINARY_NAME)
 endef
 
 .PHONY: build-all

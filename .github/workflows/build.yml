@@ -107,6 +107,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.APT_REPO_TOKEN }}
-          repository: b0bbywan/apt-repo
+          repository: b0bbywan/odio-apt-repo
           event-type: release-published
           client-payload: '{"repo": "${{ github.repository }}", "tag": "${{ github.ref_name }}"}'

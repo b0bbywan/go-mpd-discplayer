@@ -18,4 +18,4 @@ echo ""
 echo "To check status:"
 echo "  systemctl --user status mpd-discplayer.service"
 
-exit 0
+#DEBHELPER#

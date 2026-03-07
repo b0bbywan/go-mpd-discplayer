@@ -1,3 +1,10 @@
+mpd-discplayer (0.7.2~rc.2) trixie; urgency=low
+
+  * Publish deb packages
+
+ -- Mathieu Réquillart <mathieu.requillart@gmail.com>  Sat, 07 Mar 2026 00:00:00 +0100
+
+
 mpd-discplayer (0.7.1) trixie; urgency=low
 
   * Initial release

@@ -57,14 +57,14 @@ func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
 	})
 }
 
-func (rc *ReconnectingMPDClient) Mount(neighbor, label string) error {
-	neighborDiskId := fmt.Sprintf("udisks://by-uuid-%s", neighbor)
+func (rc *ReconnectingMPDClient) Mount(identifiers []string, label string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if err := findNeighbor(client, neighborDiskId); err != nil {
-			return fmt.Errorf("Failed to find %s in neighbors list: %w", neighbor, err)
+		neighborURI, err := findNeighbor(client, identifiers)
+		if err != nil {
+			return fmt.Errorf("Failed to find neighbor for %v: %w", identifiers, err)
 		}
-		if err := mount(client, neighborDiskId, label); err != nil {
-			return fmt.Errorf("Failed to mount %s -> %s: %w", neighbor, label, err)
+		if err := mount(client, neighborURI, label); err != nil {
+			return fmt.Errorf("Failed to mount %s -> %s: %w", neighborURI, label, err)
 		}
 		return nil
 	})
@@ -263,17 +263,24 @@ func DbUpdating(client *mpd.Client) bool {
 	return updating
 }
 
-func findNeighbor(client *mpd.Client, neighbor string) error {
+func findNeighbor(client *mpd.Client, identifiers []string) (string, error) {
 	res, err := client.Command("listneighbors").AttrsList("neighbor")
 	if err != nil {
-		return fmt.Errorf("Failed to list neighbors, is udisk neighbor plugin enabled?: %w", err)
+		return "", fmt.Errorf("Failed to list neighbors, is udisk neighbor plugin enabled?: %w", err)
 	}
 	for _, v := range res {
-		if neighbor == v["neighbor"] {
-			return nil
+		uri := v["neighbor"]
+		for _, id := range identifiers {
+			if strings.Contains(uri, id) {
+				return uri, nil
+			}
 		}
 	}
-	return fmt.Errorf("neighbor %s not found", neighbor)
+	var neighbors []string
+	for _, v := range res {
+		neighbors = append(neighbors, v["neighbor"])
+	}
+	return "", fmt.Errorf("no neighbor found matching %v in %v", identifiers, neighbors)
 }
 
 func mount(client *mpd.Client, neighbor, label string) error {
@@ -316,7 +323,7 @@ func checkMount(client *mpd.Client, storage, mount string) error {
 	if mount == "" {
 		return nil
 	}
-	if err := findNeighbor(client, storage); err != nil {
+	if _, err := findNeighbor(client, []string{storage}); err != nil {
 		return fmt.Errorf("%s mount does not exists: %w", mount, err)
 	}
 	return nil

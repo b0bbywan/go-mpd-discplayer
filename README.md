@@ -111,6 +111,17 @@ systemctl --user start mpd-discplayer
 	- **USB Playback**: Those settings are only necessary if using `mpd` mounting, `symlink` mounting doesn't need it.
 		- `neighbors { plugin "udisks" }`: Enable udisk mounting MPD feature
 		- `database { plugin "simple" path "~/.local/share/mpd/db" cache_directory "~/.local/share/mpd/cache" }`: Mandatory with neighbors plugins. Old `db_file` setting won't work with neighbors plugins
+		- **Headless / Polkit rule**: In a headless setup, udisks2 may deny mount requests from the MPD user. Add the following rule to `/etc/polkit-1/rules.d/80-mpd-udisks.rules` (replace `<target_user>` with the user running mpd-discplayer):
+
+```javascript
+polkit.addRule(function(action, subject) {
+  if ((action.id == "org.freedesktop.udisks2.filesystem-mount" ||
+       action.id == "org.freedesktop.udisks2.filesystem-mount-other-seat") &&
+      subject.user == "<target_user>") {
+      return polkit.Result.YES;
+  }
+});
+```
 
 ```
 # Database #######################################################################

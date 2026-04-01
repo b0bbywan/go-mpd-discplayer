@@ -36,7 +36,7 @@ func (m *mpdFinder) clear(device *udev.Device, mountpoint string) (string, error
 
 func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (string, error) {
 	identifiers := neighborIdentifiers(device)
-	label := device.PropertyValue("ID_FS_LABEL")
+	label := deviceLabel(device)
 	if err := m.mountWithRetry(identifiers, label); err != nil {
 		return "", fmt.Errorf("Failed to mount %s -> %s: %w", device.Devnode(), label, err)
 	}
@@ -74,9 +74,16 @@ func neighborIdentifiers(device *udev.Device) []string {
 }
 
 func (m *mpdFinder) unmount(device *udev.Device) (string, error) {
-	label := device.PropertyValue("ID_FS_LABEL")
+	label := deviceLabel(device)
 	if err := m.client.Unmount(label); err != nil {
 		return "", fmt.Errorf("Failed to unmount %s: %w", device.Devnode(), err)
 	}
 	return filepath.Join(m.mpdLibraryFolder, label), nil
+}
+
+func deviceLabel(device *udev.Device) string {
+	if label := device.PropertyValue("ID_FS_LABEL"); label != "" {
+		return label
+	}
+	return device.PropertyValue("ID_FS_UUID")
 }

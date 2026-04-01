@@ -2,7 +2,9 @@ package mounts
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/jochenvg/go-udev"
 
@@ -35,10 +37,29 @@ func (m *mpdFinder) clear(device *udev.Device, mountpoint string) (string, error
 func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (string, error) {
 	identifiers := neighborIdentifiers(device)
 	label := device.PropertyValue("ID_FS_LABEL")
-	if err := m.client.Mount(identifiers, label); err != nil {
+	if err := m.mountWithRetry(identifiers, label); err != nil {
 		return "", fmt.Errorf("Failed to mount %s -> %s: %w", device.Devnode(), label, err)
 	}
 	return filepath.Join(m.mpdLibraryFolder, label), nil
+}
+
+func (m *mpdFinder) mountWithRetry(identifiers []string, label string) error {
+	ticker := time.NewTicker(RetryInterval)
+	defer ticker.Stop()
+	timeoutChan := time.After(2*RetryTimeout)
+
+	for {
+		err := m.client.Mount(identifiers, label)
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ticker.C:
+			log.Printf("Polling for neighbor matching %v...", identifiers)
+		case <-timeoutChan:
+			return err
+		}
+	}
 }
 
 func neighborIdentifiers(device *udev.Device) []string {

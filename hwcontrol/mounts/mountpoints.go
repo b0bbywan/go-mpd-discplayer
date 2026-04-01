@@ -82,8 +82,19 @@ func (m *MountManager) FindRelPath(mountPoint string) (string, error) {
 
 func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string, error) {
 	defer m.mountPoints.RemoveCache(device.Devnode())
+	if m.config.Method == "mpd" {
+		return m.unmountMPD(device)
+	}
+	return m.unmountOS(device)
+}
+
+func (m *MountManager) unmountMPD(device *udev.Device) (string, error) {
+	return m.mounter.clear(device, "")
+}
+
+func (m *MountManager) unmountOS(device *udev.Device) (string, error) {
 	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
-	if err != nil && m.config.Method != "mpd" {
+	if err != nil {
 		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
 	}
 
@@ -98,9 +109,25 @@ func (m *MountManager) SeekMountPointAndClearCache(device *udev.Device) (string,
 }
 
 func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, error) {
+	if m.config.Method == "mpd" {
+		return m.mountMPD(device)
+	}
+	return m.mountOS(device)
+}
+
+func (m *MountManager) mountMPD(device *udev.Device) (string, error) {
+	validatedPath, err := m.mounter.validate(device, "", "")
+	if err != nil {
+		return "", fmt.Errorf("mounter validation failed: %w", err)
+	}
+	m.mountPoints.AddCache(device.Devnode(), validatedPath)
+	return validatedPath, nil
+}
+
+func (m *MountManager) mountOS(device *udev.Device) (string, error) {
 	devnode := device.Devnode()
 	mountPoint, err := m.findMountPointWithRetry(devnode, RetryTimeout, RetryInterval)
-	if err != nil && m.config.Method != "mpd" {
+	if err != nil {
 		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", devnode, err)
 	}
 	m.mountPoints.AddCache(devnode, mountPoint)
@@ -110,7 +137,6 @@ func (m *MountManager) FindDevicePathAndCache(device *udev.Device) (string, erro
 	}
 
 	target := generateTarget(m.config, mountPoint)
-
 	validatedPath, err := m.mounter.validate(device, mountPoint, target)
 	if err != nil {
 		return "", fmt.Errorf("mounter validation failed: %w", err)

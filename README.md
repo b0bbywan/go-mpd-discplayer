@@ -1,6 +1,11 @@
 # go-mpd-discplayer
 
+[![Build](https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml/badge.svg)](https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/b0bbywan/go-mpd-discplayer)](https://goreportcard.com/report/github.com/b0bbywan/go-mpd-discplayer)
 [![Go Reference](https://pkg.go.dev/badge/github.com/b0bbywan/go-mpd-discplayer.svg)](https://pkg.go.dev/github.com/b0bbywan/go-mpd-discplayer)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/b0bbywan?label=Sponsor&logo=GitHub)](https://github.com/sponsors/b0bbywan)
+
+> Part of the [odio](https://beta.odio.love/) project.
 
 `mpd-discplayer` is a Go-based client designed for seamless integration with MPD (Music Player Daemon). It automates disc and USB playback by generating CUE files for audio discs and managing removable media. It also handles disconnections gracefully and provides configurable audio notifications.
 

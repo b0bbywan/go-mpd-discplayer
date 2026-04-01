@@ -33,12 +33,23 @@ func (m *mpdFinder) clear(device *udev.Device, mountpoint string) (string, error
 }
 
 func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (string, error) {
-	udiskId := device.PropertyValue("ID_FS_UUID")
+	identifiers := neighborIdentifiers(device)
 	label := device.PropertyValue("ID_FS_LABEL")
-	if err := m.client.Mount(udiskId, label); err != nil {
+	if err := m.client.Mount(identifiers, label); err != nil {
 		return "", fmt.Errorf("Failed to mount %s -> %s: %w", device.Devnode(), label, err)
 	}
 	return filepath.Join(m.mpdLibraryFolder, label), nil
+}
+
+func neighborIdentifiers(device *udev.Device) []string {
+	var ids []string
+	if uuid := device.PropertyValue("ID_FS_UUID"); uuid != "" {
+		ids = append(ids, uuid)
+	}
+	if serial := device.PropertyValue("ID_SERIAL"); serial != "" {
+		ids = append(ids, serial)
+	}
+	return ids
 }
 
 func (m *mpdFinder) unmount(device *udev.Device) (string, error) {

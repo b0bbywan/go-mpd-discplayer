@@ -48,7 +48,7 @@ func usbPreChecker(device *udev.Device) bool {
 	if device == nil ||
 		device.PropertyValue("ID_USB_DRIVER") != "usb-storage" ||
 		device.PropertyValue("DEVTYPE") != "partition" ||
-		!validFsType(device.PropertyValue("ID_PART_ENTRY_TYPE")) {
+		!validFsType(device.PropertyValue("ID_PART_ENTRY_TYPE"), device.PropertyValue("ID_FS_TYPE")) {
 		return false
 	}
 	sysname := device.Sysname()
@@ -59,12 +59,15 @@ func usbPreChecker(device *udev.Device) bool {
 	return true
 }
 
-func validFsType(fsType string) bool {
-	if fsType == "" ||
-		fsType == "0x0" || // empty partition
-		fsType == "0xef" || // efi system partition
-		fsType == "0x82" { // linux swap
-		return false
+func validFsType(partEntryType, fsType string) bool {
+	if partEntryType != "" {
+		if partEntryType == "0x0" || // empty partition
+			partEntryType == "0xef" || // efi system partition
+			partEntryType == "0x82" { // linux swap
+			return false
+		}
+		return true
 	}
-	return true
+	// Fallback to ID_FS_TYPE when ID_PART_ENTRY_TYPE is not available
+	return fsType != ""
 }

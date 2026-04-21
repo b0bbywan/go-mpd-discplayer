@@ -1,11 +1,32 @@
-# go-mpd-discplayer
-
-[![Build](https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml/badge.svg)](https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/b0bbywan/go-mpd-discplayer)](https://goreportcard.com/report/github.com/b0bbywan/go-mpd-discplayer)
-[![Go Reference](https://pkg.go.dev/badge/github.com/b0bbywan/go-mpd-discplayer.svg)](https://pkg.go.dev/github.com/b0bbywan/go-mpd-discplayer)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/b0bbywan?label=Sponsor&logo=GitHub)](https://github.com/sponsors/b0bbywan)
-
-> Part of the [odio](https://beta.odio.love/) project.
+<p align="center">
+  <a href="https://odio.love"><img src="https://odio.love/logo.png" alt="odio" width="160" /></a>   
+  </p>
+  <h1 align="center">go-mpd-discplayer</h1>
+  <p align="center"><em>MPD companion that autoplays audio CDs, USB drives, and scheduled URIs.</em></p>
+  <p align="center">
+  <a href="https://github.com/b0bbywan/go-mpd-discplayer/releases"><img src="https://img.shields.io/github/v/release/b0bbywan/go-mpd-discplayer?include_prereleases" alt="Release" /></a>
+  <a href="https://github.com/b0bbywan/go-mpd-discplayer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <a href="https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml"><img src="https://github.com/b0bbywan/go-mpd-discplayer/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
+  <a href="https://goreportcard.com/report/github.com/b0bbywan/go-mpd-discplayer"><img src="https://goreportcard.com/badge/github.com/b0bbywan/go-mpd-discplayer" alt="Go Report Card" /></a>
+  <a href="https://pkg.go.dev/github.com/b0bbywan/go-mpd-discplayer"><img src="https://pkg.go.dev/badge/github.com/b0bbywan/go-mpd-discplayer.svg" alt="Go Reference" /></a>
+  <a href="https://github.com/sponsors/b0bbywan"><img src="https://img.shields.io/github/sponsors/b0bbywan?label=Sponsor&logo=GitHub" alt="GitHub Sponsors" /></a>   
+  </p>
+  <p align="center">
+  <a href="https://docs.odio.love/guides/audio-cd/"><img src="https://img.shields.io/badge/Audio%20CD-F18D00" alt="Audio CD autoplay" /></a>
+  <a href="https://docs.odio.love/guides/usb-flashdrives/"><img src="https://img.shields.io/badge/USB%20autoplay-2C2C2C?logo=usb&logoColor=white" alt="USB autoplay" /></a>
+  <a href="https://docs.odio.love/disc-player/disc-cuer/"><img src="https://img.shields.io/badge/disc--cuer-5B21B6" alt="disc-cuer" /></a>
+  <a href="https://docs.odio.love/guides/audio-notifications/"><img src="https://img.shields.io/badge/Audio%20notifications-E60023" alt="Audio notifications" /></a>   
+  </p>
+  <p align="center">   
+  Part of the <a href="https://odio.love">odio</a> project — <a href="https://docs.odio.love/disc-player/overview/">full documentation</a>.
+  </p>
+  <p align="center">
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white" alt="Go" /></a>
+  <a href="https://www.musicpd.org/"><img src="https://img.shields.io/badge/MPD-F18D00" alt="MPD" /></a>
+  <a href="https://github.com/features/actions"><img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?logo=githubactions&logoColor=white" alt="GitHub Actions" /></a>
+  <a href="https://docs.odio.love/disc-player/installation/"><img src="https://img.shields.io/badge/deb-A81D33?logo=debian&logoColor=white" alt="deb" /></a>
+  <a href="https://docs.odio.love/disc-player/installation/"><img src="https://img.shields.io/badge/rpm-294172?logo=redhat&logoColor=white" alt="rpm" /></a>   
+  </p>
 
 `mpd-discplayer` is a Go-based client designed for seamless integration with MPD (Music Player Daemon). It automates disc and USB playback by generating CUE files for audio discs and managing removable media. It also handles disconnections gracefully and provides configurable audio notifications.
 

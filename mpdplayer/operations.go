@@ -148,7 +148,7 @@ func loadCue(client *mpd.Client, cuerConfig *config.Config, device string) error
 	if cuerConfig == nil {
 		return fmt.Errorf("No Cuer config to generate from")
 	}
-	cueFilePath, err := cue.GenerateDefaultFromDisc(device, cuerConfig)
+	cueFilePath, err := cue.New(cuerConfig).Generate(cue.Options{Device: device})
 	if err != nil || cueFilePath == "" {
 		return fmt.Errorf("failed to generate CUE file: %w", err)
 	}

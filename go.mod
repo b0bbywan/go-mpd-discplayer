@@ -3,7 +3,7 @@ module github.com/b0bbywan/go-mpd-discplayer
 go 1.25.0
 
 require (
-	github.com/b0bbywan/go-disc-cuer v0.3.0
+	github.com/b0bbywan/go-disc-cuer v0.4.0-beta.1
 	github.com/ebitengine/oto/v3 v3.4.0
 	github.com/fhs/gompd/v2 v2.3.0
 	github.com/jfreymuth/pulse v0.1.1
@@ -25,7 +25,8 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	go.uploadedlobster.com/discid v0.7.0 // indirect
+	go.uploadedlobster.com/discid v0.9.0 // indirect
+	go.uploadedlobster.com/mbtypes v0.4.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )

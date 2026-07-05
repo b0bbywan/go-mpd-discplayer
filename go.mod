@@ -6,7 +6,7 @@ require (
 	github.com/b0bbywan/go-disc-cuer v0.3.0
 	github.com/ebitengine/oto/v3 v3.4.0
 	github.com/fhs/gompd/v2 v2.3.0
-	github.com/jfreymuth/pulse v0.1.1
+	github.com/jfreymuth/pulse v0.1.2
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/viper v1.21.0

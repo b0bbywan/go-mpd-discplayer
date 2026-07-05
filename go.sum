@@ -17,8 +17,8 @@ github.com/go-viper/mapstructure/v2 v2.4.0 h1:EBsztssimR/CONLSZZ04E8qAkxNYq4Qp9L
 github.com/go-viper/mapstructure/v2 v2.4.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/jfreymuth/pulse v0.1.1 h1:9WLNBNCijmtZ14ZJpatgJPu/NjwAl3TIKItSFnTh+9A=
-github.com/jfreymuth/pulse v0.1.1/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
+github.com/jfreymuth/pulse v0.1.2 h1:t4+ItUuWLlQnulVDOL2eAotKk+utKJzK8ol0iybYAmQ=
+github.com/jfreymuth/pulse v0.1.2/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
 github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 h1:smvLGU3obGU5kny71BtE/ibR0wIXRUiRFDmSn0Nxz1E=
 github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1/go.mod h1:fP/NdyhRVOv09PLRbVXrSqHhrfQypdZwgE2L4h2U5C8=
 github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b h1:Pzf7tldbCVqwl3NnOnTamEWdh/rL41fsoYCn2HdHgRA=

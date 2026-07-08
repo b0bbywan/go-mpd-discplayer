@@ -22,7 +22,7 @@ func NewMPDConnection(connectionType, address string, reconnectWait time.Duratio
 	}
 
 	if err := validateMPDConnection(conn); err != nil {
-		return nil, fmt.Errorf("Failed to create valid MPD Config")
+		return nil, fmt.Errorf("failed to create valid MPD config")
 	}
 	return conn, nil
 }

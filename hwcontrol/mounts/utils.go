@@ -3,6 +3,7 @@ package mounts
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -21,7 +22,11 @@ func readMountsFile(callback func(device, mountPoint string)) error {
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %v", mountFile, err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			log.Printf("warning: failed to close %s: %v", mountFile, cerr)
+		}
+	}()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()

@@ -30,7 +30,7 @@ func NewPulseAudioPlayer(sc *SoundCache, pulseServerString string) (*PulseAudioP
 func (p *PulseAudioPlayer) Play(name string) error {
 	entry, err := p.sc.Get(name)
 	if err != nil {
-		return fmt.Errorf("Could not play %s: %w", name, err)
+		return fmt.Errorf("could not play %s: %w", name, err)
 	}
 
 	reader := pulse.NewReader(

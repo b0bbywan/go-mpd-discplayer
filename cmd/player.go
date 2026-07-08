@@ -68,7 +68,7 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 	if err != nil {
 		// File not found is acceptable, only raise errors for other issues
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("Error reading config file: %w", err)
+			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
 	var wg sync.WaitGroup
@@ -79,7 +79,7 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Error validating MPD Connection: %w", err)
+		return nil, fmt.Errorf("error validating MPD connection: %w", err)
 	}
 	mpdClient := mpdplayer.NewReconnectingMPDClient(ctx, mpdConnection)
 	if err = setMpdFolder(mpdClient); err != nil {

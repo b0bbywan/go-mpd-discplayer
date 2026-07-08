@@ -57,7 +57,7 @@ func NewNotifier(config *NotificationConfig) *Notifier {
 		log.Printf("Notifications disabled\n")
 		return nil
 	default:
-		err = fmt.Errorf("Unsupported option")
+		err = fmt.Errorf("unsupported option")
 	}
 	if err != nil {
 		log.Printf("Failed to initialize player for backend %s: %v\nNotifications disabled", config.AudioBackend, err)

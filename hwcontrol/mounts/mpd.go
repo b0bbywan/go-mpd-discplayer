@@ -18,7 +18,7 @@ type mpdFinder struct {
 
 func newMpdFinder(client *mpdplayer.ReconnectingMPDClient, mpdLibraryFolder string) (*mpdFinder, error) {
 	if err := client.ClearMounts(); err != nil {
-		return nil, fmt.Errorf("Failed to clear mounts: %w", err)
+		return nil, fmt.Errorf("failed to clear mounts: %w", err)
 	}
 	return &mpdFinder{
 		client:           client,
@@ -38,7 +38,7 @@ func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (strin
 	identifiers := neighborIdentifiers(device)
 	label := deviceLabel(device)
 	if err := m.mountWithRetry(identifiers, label); err != nil {
-		return "", fmt.Errorf("Failed to mount %s -> %s: %w", device.Devnode(), label, err)
+		return "", fmt.Errorf("failed to mount %s -> %s: %w", device.Devnode(), label, err)
 	}
 	return filepath.Join(m.mpdLibraryFolder, label), nil
 }
@@ -76,7 +76,7 @@ func neighborIdentifiers(device *udev.Device) []string {
 func (m *mpdFinder) unmount(device *udev.Device) (string, error) {
 	label := deviceLabel(device)
 	if err := m.client.Unmount(label); err != nil {
-		return "", fmt.Errorf("Failed to unmount %s: %w", device.Devnode(), err)
+		return "", fmt.Errorf("failed to unmount %s: %w", device.Devnode(), err)
 	}
 	return filepath.Join(m.mpdLibraryFolder, label), nil
 }

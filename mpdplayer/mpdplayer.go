@@ -79,14 +79,18 @@ func (rc *ReconnectingMPDClient) Reconnect() error {
 
 func (rc *ReconnectingMPDClient) disconnectWithoutLock() {
 	if rc.client != nil {
-		rc.client.Close()
+		if err := rc.client.Close(); err != nil {
+			log.Printf("warning: failed to close MPD client: %v", err)
+		}
 		rc.client = nil
 	}
 }
 
 func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 	if rc.client != nil {
-		rc.client.Close()
+		if err := rc.client.Close(); err != nil {
+			log.Printf("warning: failed to close MPD client: %v", err)
+		}
 	}
 
 	var err error

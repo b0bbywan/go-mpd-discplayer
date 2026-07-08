@@ -100,7 +100,7 @@ func (rc *ReconnectingMPDClient) GetConfig() (string, error) {
 		config, err = client.Command("config").Attrs()
 		return err
 	}); err != nil {
-		return "", fmt.Errorf("Failed to get MPD Config from server: %w", err)
+		return "", fmt.Errorf("failed to get MPD config from server: %w", err)
 	}
 	musicDirectory, ok := config["music_directory"]
 	if !ok {
@@ -146,7 +146,7 @@ func loadCDDATracks(client *mpd.Client, device string) error {
 
 func loadCue(client *mpd.Client, cuerConfig *config.Config, device string) error {
 	if cuerConfig == nil {
-		return fmt.Errorf("No Cuer config to generate from")
+		return fmt.Errorf("no Cuer config to generate from")
 	}
 	cueFilePath, err := cue.New(cuerConfig).Generate(cue.Options{Device: device})
 	if err != nil || cueFilePath == "" {
@@ -194,7 +194,7 @@ func checkSongPath(song mpd.Attrs, checkPath string) bool {
 // addUSBToQueue adds the specified label to the playlist.
 func addUSBToQueue(client *mpd.Client, label string) error {
 	if err := UpdateDBAndWait(client, label); err != nil {
-		return fmt.Errorf("Database update failed: %w", err)
+		return fmt.Errorf("database update failed: %w", err)
 	}
 	log.Printf("Adding %s files to queue...", label)
 	return addUri(client, label)
@@ -235,7 +235,7 @@ func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
 
 func UpdateDBAndWait(client *mpd.Client, label string) error {
 	if _, err := client.Update(label); err != nil {
-		return fmt.Errorf("Failed to udpate Database: %w", err)
+		return fmt.Errorf("failed to update database: %w", err)
 	}
 	timeout := 30 * time.Second
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -249,7 +249,7 @@ func UpdateDBAndWait(client *mpd.Client, label string) error {
 		select {
 		case <-ticker.C:
 		case <-timeoutChan:
-			return fmt.Errorf("Database did not finish update within timeout")
+			return fmt.Errorf("database did not finish update within timeout")
 		}
 	}
 }

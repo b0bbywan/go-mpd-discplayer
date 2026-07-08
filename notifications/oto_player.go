@@ -37,15 +37,15 @@ func NewOtoPlayer(sc *SoundCache) (*OtoPlayer, error) {
 func (o *OtoPlayer) Play(name string) error {
 	sound, err := o.sc.Get(name)
 	if err != nil {
-		return fmt.Errorf("Could not play %s: %w", name, err)
+		return fmt.Errorf("could not play %s: %w", name, err)
 	}
 
 	// Créer un reader depuis les données PCM
 	reader := bytes.NewReader(sound.PCM)
 
 	// Créer un player et jouer le son
+	// Player.Close is deprecated as of oto v3.4 and no longer required.
 	player := o.otoCtx.NewPlayer(reader)
-	defer player.Close()
 
 	player.Play()
 

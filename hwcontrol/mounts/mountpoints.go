@@ -37,7 +37,7 @@ type MountConfig struct {
 func NewMountManager(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (*MountManager, error) {
 	mounter, err := newMounter(config, client)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create Mounter: %w", err)
+		return nil, fmt.Errorf("failed to create Mounter: %w", err)
 	}
 	m := &MountManager{
 		config:      config,
@@ -59,7 +59,7 @@ func NewMountConfig(base, sub, method string) *MountConfig {
 func (m *MountManager) Mount(device *udev.Device) (string, error) {
 	mountPoint, err := m.FindDevicePathAndCache(device)
 	if err != nil {
-		return "", fmt.Errorf("Failed to find a mountpoint for %s while mounting: %w", device.Devnode(), err)
+		return "", fmt.Errorf("failed to find a mountpoint for %s while mounting: %w", device.Devnode(), err)
 	}
 	return m.FindRelPath(mountPoint)
 }
@@ -67,7 +67,7 @@ func (m *MountManager) Mount(device *udev.Device) (string, error) {
 func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 	mountPoint, err := m.SeekMountPointAndClearCache(device)
 	if err != nil {
-		return "", fmt.Errorf("Failed to find a mountpoint for %s while unmounting: %w", device.Devnode(), err)
+		return "", fmt.Errorf("failed to find a mountpoint for %s while unmounting: %w", device.Devnode(), err)
 	}
 	return m.FindRelPath(mountPoint)
 }
@@ -75,7 +75,7 @@ func (m *MountManager) Unmount(device *udev.Device) (string, error) {
 func (m *MountManager) FindRelPath(mountPoint string) (string, error) {
 	relPath, err := filepath.Rel(m.config.MPDLibraryFolder, mountPoint)
 	if err != nil {
-		return "", fmt.Errorf("Found mountpoint %s not in MPDLibraryFolder: %w", mountPoint, err)
+		return "", fmt.Errorf("found mountpoint %s not in MPDLibraryFolder: %w", mountPoint, err)
 	}
 	return relPath, nil
 }
@@ -95,7 +95,7 @@ func (m *MountManager) unmountMPD(device *udev.Device) (string, error) {
 func (m *MountManager) unmountOS(device *udev.Device) (string, error) {
 	mountPoint, err := m.seekMountPointWithCacheFallback(device.Devnode())
 	if err != nil {
-		return "", fmt.Errorf("Unknown Device %s: %w", device.Devnode(), err)
+		return "", fmt.Errorf("unknown device %s: %w", device.Devnode(), err)
 	}
 
 	if strings.HasPrefix(mountPoint, m.config.MPDLibraryFolder) {
@@ -103,7 +103,7 @@ func (m *MountManager) unmountOS(device *udev.Device) (string, error) {
 	}
 
 	if mountPoint, err = m.mounter.clear(device, mountPoint); err != nil {
-		return "", fmt.Errorf("Failed to unmount: %w", err)
+		return "", fmt.Errorf("failed to unmount: %w", err)
 	}
 	return mountPoint, nil
 }
@@ -128,7 +128,7 @@ func (m *MountManager) mountOS(device *udev.Device) (string, error) {
 	devnode := device.Devnode()
 	mountPoint, err := m.findMountPointWithRetry(devnode, RetryTimeout, RetryInterval)
 	if err != nil {
-		return "", fmt.Errorf("Error finding mountpoint for device %s: %w", devnode, err)
+		return "", fmt.Errorf("error finding mountpoint for device %s: %w", devnode, err)
 	}
 	m.mountPoints.AddCache(devnode, mountPoint)
 
@@ -157,7 +157,7 @@ func (m *MountManager) findMountPointWithRetry(device string, timeout, interval 
 		case <-ticker.C:
 			log.Printf("Polling for %s mount point...", device)
 		case <-timeoutChan:
-			return "", fmt.Errorf("Device %s not found within timeout", device)
+			return "", fmt.Errorf("device %s not found within timeout", device)
 		}
 	}
 }
@@ -169,7 +169,7 @@ func (m *MountManager) seekMountPointWithCacheFallback(device string) (string, e
 	if path, err := m.mountPoints.GetCache(device); err == nil {
 		return path, nil
 	}
-	return "", fmt.Errorf("Failed to find %s in mount file and cache", device)
+	return "", fmt.Errorf("failed to find %s in mount file and cache", device)
 }
 
 func newMounter(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (Mounter, error) {
@@ -179,7 +179,7 @@ func newMounter(config *MountConfig, client *mpdplayer.ReconnectingMPDClient) (M
 	case "mpd":
 		return newMpdFinder(client, config.MPDLibraryFolder)
 	default:
-		return nil, fmt.Errorf("Unsupported mount type: %s", config.Method)
+		return nil, fmt.Errorf("unsupported mount type: %s", config.Method)
 	}
 }
 
@@ -193,7 +193,7 @@ func seekMountPoint(device string) (string, error) {
 	}
 
 	if err := readMountsFile(mountPointSeeker); err != nil {
-		return "", fmt.Errorf("Failed to seek mount point %s: %w", device, err)
+		return "", fmt.Errorf("failed to seek mount point %s: %w", device, err)
 	}
 
 	if mountPoint == "" {

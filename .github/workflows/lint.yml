@@ -25,6 +25,16 @@ jobs:
       - name: Install cgo dev headers
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdiscid-dev libudev-dev
 
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            echo "Run 'gofmt -w .' to fix."
+            exit 1
+          fi
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

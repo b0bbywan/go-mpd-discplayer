@@ -46,7 +46,7 @@ func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (strin
 func (m *mpdFinder) mountWithRetry(identifiers []string, label string) error {
 	ticker := time.NewTicker(RetryInterval)
 	defer ticker.Stop()
-	timeoutChan := time.After(2*RetryTimeout)
+	timeoutChan := time.After(2 * RetryTimeout)
 
 	for {
 		err := m.client.Mount(identifiers, label)

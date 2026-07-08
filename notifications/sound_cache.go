@@ -7,7 +7,7 @@ import (
 )
 
 type SoundEntry struct {
-	PCM 		[]byte
+	PCM []byte
 }
 
 type SoundCache struct {
@@ -57,7 +57,7 @@ func (sc *SoundCache) loadAudioFile(name, path string) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sc.sounds[name] = &SoundEntry{
-		PCM:        data,
+		PCM: data,
 	}
 
 	return nil

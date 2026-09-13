@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/b0bbywan/go-disc-cuer v0.4.0
-	github.com/ebitengine/oto/v3 v3.4.1
+	github.com/ebitengine/oto/v3 v3.5.0
 	github.com/fhs/gompd/v2 v2.3.0
 	github.com/jfreymuth/pulse v0.1.3
 	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	github.com/ebitengine/purego v0.9.0 // indirect
+	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 // indirect

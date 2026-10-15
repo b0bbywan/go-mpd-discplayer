@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -203,6 +204,18 @@ func (p *Player) Close() {
 		p.scheduler.Close()
 	}
 	p.wg.Wait()
+}
+
+// Eject stops disc playback and ejects the disc.
+func (p *Player) Eject(device string) error {
+	// Stop first so MPD is not left reading a disc that is going away
+	if err := p.Client.StopDiscPlayback(); err != nil {
+		log.Printf("warning: failed to stop disc playback before eject: %v", err)
+	}
+	if err := hwcontrol.EjectDisc(device); err != nil {
+		return fmt.Errorf("error ejecting %s: %w", device, err)
+	}
+	return nil
 }
 
 func (p *Player) NotifyEvent(name string) {

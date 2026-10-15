@@ -42,6 +42,16 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 	})
 }
 
+// Stop stops playback, whatever is playing, and removes the disc tracks from the queue.
+func (rc *ReconnectingMPDClient) Stop() error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := client.Stop(); err != nil {
+			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+		}
+		return deleteFromPlaylist(client, CDDAPathPrefix)
+	})
+}
+
 func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
 	return rc.StopPlayback(CDDAPathPrefix)
 }

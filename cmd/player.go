@@ -214,10 +214,10 @@ func (p *Player) PlayDevice(device string) error {
 	return nil
 }
 
-// Stop stops disc playback and removes the disc tracks from the queue.
+// Stop stops playback, whatever is playing, and removes the disc tracks from the queue.
 func (p *Player) Stop() error {
-	if err := p.Client.StopDiscPlayback(); err != nil {
-		return fmt.Errorf("error stopping disc playback: %w", err)
+	if err := p.Client.Stop(); err != nil {
+		return fmt.Errorf("error stopping playback: %w", err)
 	}
 	return nil
 }

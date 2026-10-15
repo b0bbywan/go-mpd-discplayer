@@ -223,6 +223,14 @@ func (p *Player) PlayDevice(device string) error {
 	return nil
 }
 
+// PlayURL replaces the queue with url, a webradio for instance, and starts playback.
+func (p *Player) PlayURL(url string) error {
+	if err := p.Client.StartPlayback(url); err != nil {
+		return fmt.Errorf("error playing %s: %w", url, err)
+	}
+	return nil
+}
+
 // Stop stops playback, whatever is playing, and removes the disc tracks from the queue.
 func (p *Player) Stop() error {
 	if err := p.Client.Stop(); err != nil {

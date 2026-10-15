@@ -17,6 +17,7 @@ import (
 // Player is the disc player driven by the API.
 type Player interface {
 	Play() error
+	PlayURL(url string) error
 	Stop() error
 	Eject() error
 }

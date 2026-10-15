@@ -20,7 +20,8 @@ type Player interface {
 	StopDisc() error              // stop playback when the disc is playing
 	EjectDisc(drive string) error // eject the disc in drive, "" for the drive holding one
 
-	Stop() error // stop playback, whatever is playing
+	PlayURL(url string) error // play a stream
+	Stop() error              // stop playback, whatever is playing
 }
 
 type Config struct {

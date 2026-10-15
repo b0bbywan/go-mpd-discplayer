@@ -1,0 +1,54 @@
+package detect
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/jochenvg/go-udev"
+)
+
+func TestPickDrive(t *testing.T) {
+	tests := []struct {
+		drives  []string
+		want    string
+		wantErr error
+	}{
+		{nil, "", ErrNoDisc},
+		{[]string{"/dev/sr1"}, "/dev/sr1", nil},
+		{[]string{"/dev/sr0", "/dev/sr1"}, "", ErrSeveralDiscs},
+	}
+	for _, tt := range tests {
+		got, err := pickDrive("a disc", tt.drives)
+		if got != tt.want || !errors.Is(err, tt.wantErr) {
+			t.Errorf("pickDrive(%v) = %q, %v; want %q, %v", tt.drives, got, err, tt.want, tt.wantErr)
+		}
+	}
+}
+
+func TestPickEjectDrive(t *testing.T) {
+	tests := []struct {
+		drives, loaded []string
+		want           string
+		wantErr        error
+	}{
+		{nil, nil, "", ErrNoDrive},
+		{[]string{"/dev/sr0"}, nil, "/dev/sr0", nil},
+		{[]string{"/dev/sr0", "/dev/sr1"}, nil, "", ErrSeveralDrives},
+		{[]string{"/dev/sr0", "/dev/sr1"}, []string{"/dev/sr1"}, "/dev/sr1", nil},
+		{[]string{"/dev/sr0", "/dev/sr1"}, []string{"/dev/sr0", "/dev/sr1"}, "", ErrSeveralDiscs},
+	}
+	for _, tt := range tests {
+		got, err := pickEjectDrive(tt.drives, tt.loaded)
+		if got != tt.want || !errors.Is(err, tt.wantErr) {
+			t.Errorf("pickEjectDrive(%v, %v) = %q, %v; want %q, %v", tt.drives, tt.loaded, got, err, tt.want, tt.wantErr)
+		}
+	}
+}
+
+func TestFindDriveNoMatch(t *testing.T) {
+	skipWithoutSysfs(t)
+	_, err := findDrive("nothing", func(*udev.Device) bool { return false })
+	if !errors.Is(err, ErrNoDisc) {
+		t.Errorf("findDrive() error = %v, want %v", err, ErrNoDisc)
+	}
+}

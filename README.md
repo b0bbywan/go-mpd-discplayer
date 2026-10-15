@@ -122,8 +122,8 @@ Without option, `mpd-discplayer` runs as a daemon. The following options run a s
 | Option | Description |
 |---|---|
 | `--play` | Clear the MPD queue, load the disc (from its CUE file when available, as individual CDDA tracks otherwise) and start playback |
-| `--stop` | Stop playback if a disc track is playing and remove the disc tracks from the queue |
-| `--eject` | Same as `--stop`, then eject the disc. Useful for drives without an eject button, or to eject from a UI |
+| `--stop` | Stop playback, whatever is playing, and remove the disc tracks from the queue |
+| `--eject` | Stop playback if a disc track is playing, remove the disc tracks from the queue, then eject the disc. Useful for drives without an eject button, or to eject from a UI |
 | `--device <device>` | Disc device used by `--play` and `--eject` (default: `/dev/sr0`) |
 | `--version` | Print version and exit |
 | `-h`, `--help` | Display help |
@@ -131,6 +131,24 @@ Without option, `mpd-discplayer` runs as a daemon. The following options run a s
 ```bash
 ./mpd-discplayer --eject
 ./mpd-discplayer --play --device /dev/sr1
+```
+
+### Web API
+When enabled (see [Web API Options](#web-api-options)), the daemon exposes the same actions over HTTP. Instead of `--device`, the API finds the drive holding the disc:
+
+| Route | Action |
+|---|---|
+| `POST /player/play` | Same as `--play`, on the drive holding an audio disc |
+| `POST /player/stream` | Replace the MPD queue with an `http` or `https` URL, a webradio for instance, and start playback. JSON body: `{"url": "<url>"}` |
+| `POST /player/stop` | Same as `--stop` |
+| `POST /player/eject` | Same as `--eject`, on the drive holding a disc of any kind |
+
+A successful action answers `202 Accepted`. When no drive or several drives hold a disc, it answers `409 Conflict`, an invalid request body `400`, `413` or `415`, other failures `500`, with the error as plain text. CORS allows any origin.
+
+```bash
+curl -X POST http://127.0.0.1:8019/player/eject
+curl -X POST -H 'Content-Type: application/json' -d '{"url": "https://stream.example.com/radio.mp3"}' http://127.0.0.1:8019/player/stream
+curl -X POST --unix-socket /run/user/1000/mpd-discplayer.sock http://localhost/player/eject
 ```
 
 ### Using Systemd (Optional)
@@ -232,6 +250,11 @@ MountConfig: "mpd"
 MPDCueSubfolder: ".disc-cuer"
 MPDUSBSubfolder: ".udisks"
 Schedule: {}
+API:
+  Enabled: false
+  Bind: "127.0.0.1"
+  Port: 8019
+  Socket: ""
 
 ```
 
@@ -284,6 +307,13 @@ Note: Ensure that the `usb_label` matches the label of the USB device. For audio
 - **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
 - **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
 - **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.pcm`, `out.pcm` and `error.pcm` to be present in the specified folder or notifications will be disabled.
+
+#### Web API Options
+The web API is disabled by default. Under the `API` key:
+- **Enabled**: `false` *(default)*. Set to `true` to start the web API with the daemon.
+- **Bind**: `"127.0.0.1"` *(default)*. Address of the TCP listener, `"0.0.0.0"` to listen on all interfaces.
+- **Port**: `8019` *(default)*. Port of the TCP listener, `0` disables it.
+- **Socket**: `""` *(default, none)*. Unix socket to serve on too, for a reverse proxy running as the same user. A socket left behind by a previous run is replaced.
 
 ### Environment Variables
 

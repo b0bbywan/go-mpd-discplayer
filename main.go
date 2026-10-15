@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/b0bbywan/go-mpd-discplayer/api"
 	"github.com/b0bbywan/go-mpd-discplayer/cmd"
 )
 
@@ -71,8 +72,28 @@ func main() {
 
 	// Default behavior
 	player.Start()
+	apiDone := runAPI(ctx, player)
 
 	<-ctx.Done()
+	<-apiDone
+}
+
+// runAPI serves the web API until ctx is done, when it is enabled. The
+// returned channel is closed once the server has shut down.
+func runAPI(ctx context.Context, player *cmd.Player) <-chan struct{} {
+	done := make(chan struct{})
+	cfg := cmd.APIConfig()
+	if cfg == nil {
+		close(done)
+		return done
+	}
+	go func() {
+		defer close(done)
+		if err := api.NewServer(*cfg, player).Run(ctx); err != nil {
+			log.Printf("Web API disabled: %v", err)
+		}
+	}()
+	return done
 }
 
 func usage() {

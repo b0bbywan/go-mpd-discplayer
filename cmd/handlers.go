@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
@@ -70,10 +69,7 @@ func (player *Player) newDiscHandler() {
 		detect.DeviceDisc,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			if err := hwcontrol.SetDiscSpeed(dev.Path(), player.discSpeed); err != nil {
-				log.Printf("[%s] Error setting disc speed on %s: %v", detect.DeviceDisc, dev.Path(), err)
-			}
-			if err := player.Client.StartDiscPlayback(dev.Path()); err != nil {
+			if err := player.PlayDisc(dev.Path()); err != nil {
 				return fmt.Errorf("[%s] Error starting %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil

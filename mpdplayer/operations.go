@@ -45,6 +45,16 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 	})
 }
 
+// Stop stops playback, whatever is playing. The queue is left untouched.
+func (rc *ReconnectingMPDClient) Stop() error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := client.Stop(); err != nil {
+			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+		}
+		return nil
+	})
+}
+
 // StopAndRemove stops playback when the current song path starts with
 // prefix, then removes the songs under prefix from the queue.
 func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {

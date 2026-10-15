@@ -239,3 +239,16 @@ func TestContainsAny(t *testing.T) {
 		}
 	}
 }
+
+func TestStop(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{"cdda:///1", "usb/a.flac"}
+	f.current = 1
+	client := f.start(t)
+
+	if err := client.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "stop")
+	assertQueue(t, f, "cdda:///1", "usb/a.flac")
+}

@@ -208,14 +208,33 @@ func (p *Player) Close() {
 	p.wg.Wait()
 }
 
-// Eject stops disc playback and ejects the disc.
-func (p *Player) Eject(device string) error {
+// PlayDisc replaces the queue with the disc in drive and starts playback.
+func (p *Player) PlayDisc(drive string) error {
+	if err := hwcontrol.SetDiscSpeed(drive, p.discSpeed); err != nil {
+		log.Printf("warning: failed to set disc speed on %s: %v", drive, err)
+	}
+	if err := p.Client.StartDiscPlayback(drive); err != nil {
+		return fmt.Errorf("error adding tracks: %w", err)
+	}
+	return nil
+}
+
+// Stop stops playback, whatever is playing. The queue is left untouched.
+func (p *Player) Stop() error {
+	if err := p.Client.Stop(); err != nil {
+		return fmt.Errorf("error stopping playback: %w", err)
+	}
+	return nil
+}
+
+// EjectDisc stops disc playback and ejects the disc in drive.
+func (p *Player) EjectDisc(drive string) error {
 	// Stop first so MPD is not left reading a disc that is going away
 	if err := p.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)
 	}
-	if err := hwcontrol.EjectDisc(device); err != nil {
-		return fmt.Errorf("error ejecting %s: %w", device, err)
+	if err := hwcontrol.EjectDisc(drive); err != nil {
+		return fmt.Errorf("error ejecting %s: %w", drive, err)
 	}
 	return nil
 }

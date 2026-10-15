@@ -206,8 +206,50 @@ func (p *Player) Close() {
 	p.wg.Wait()
 }
 
-// Eject stops disc playback and ejects the disc.
-func (p *Player) Eject(device string) error {
+// Play plays the drive holding an audio disc.
+func (p *Player) Play() error {
+	device, err := detect.FindAudioDisc()
+	if err != nil {
+		return err
+	}
+	return p.PlayDevice(device)
+}
+
+// PlayDevice replaces the queue with the disc in device and starts playback.
+func (p *Player) PlayDevice(device string) error {
+	if err := p.Client.StartDiscPlayback(device); err != nil {
+		return fmt.Errorf("error adding tracks: %w", err)
+	}
+	return nil
+}
+
+// PlayURL replaces the queue with url, a webradio for instance, and starts playback.
+func (p *Player) PlayURL(url string) error {
+	if err := p.Client.StartPlayback(url); err != nil {
+		return fmt.Errorf("error playing %s: %w", url, err)
+	}
+	return nil
+}
+
+// Stop stops playback, whatever is playing, and removes the disc tracks from the queue.
+func (p *Player) Stop() error {
+	if err := p.Client.Stop(); err != nil {
+		return fmt.Errorf("error stopping playback: %w", err)
+	}
+	return nil
+}
+
+// Eject ejects the drive holding a disc.
+func (p *Player) Eject() error {
+	device, err := detect.FindDisc()
+	if err != nil {
+		return err
+	}
+	return p.EjectDevice(device)
+}
+
+// EjectDevice stops disc playback and ejects the disc in device.
+func (p *Player) EjectDevice(device string) error {
 	// Stop first so MPD is not left reading a disc that is going away
 	if err := p.Client.StopDiscPlayback(); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)

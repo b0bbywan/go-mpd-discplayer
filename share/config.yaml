@@ -37,6 +37,15 @@ MountConfig: "mpd"
 # CD read speed (1-12, default: 12)
 #DiscSpeed: 12
 
+# Web API (disabled by default): POST /player/play, /player/stream, /player/stop, /player/eject
+#API:
+#  Enabled: true
+#  # TCP listener, Port: 0 disables it
+#  Bind: "127.0.0.1"
+#  Port: 8019
+#  # Unix socket for a reverse proxy, empty = none
+#  Socket: "/run/user/1000/mpd-discplayer.sock"
+
 # Audio backend for notifications
 # "pulse": PulseAudio (default)
 # "alsa": ALSA direct

@@ -116,6 +116,23 @@ Once installed, `mpd-discplayer` automatically detects devices and interacts wit
 ./mpd-discplayer
 ```
 
+### Command-line Options
+Without option, `mpd-discplayer` runs as a daemon. The following options run a single action on the disc player and exit, using the same configuration and MPD connection as the daemon. Only one of `--play`, `--stop` and `--eject` can be used at a time.
+
+| Option | Description |
+|---|---|
+| `--play` | Clear the MPD queue, load the disc (from its CUE file when available, as individual CDDA tracks otherwise) and start playback |
+| `--stop` | Stop playback if a disc track is playing and remove the disc tracks from the queue |
+| `--eject` | Same as `--stop`, then eject the disc. Useful for drives without an eject button, or to eject from a UI |
+| `--device <device>` | Disc device used by `--play` and `--eject` (default: `/dev/sr0`) |
+| `--version` | Print version and exit |
+| `-h`, `--help` | Display help |
+
+```bash
+./mpd-discplayer --eject
+./mpd-discplayer --play --device /dev/sr1
+```
+
 ### Using Systemd (Optional)
 To run mpd-discplayer as a systemd service:
 

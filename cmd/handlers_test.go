@@ -144,6 +144,7 @@ func TestPlayerActions(t *testing.T) {
 		wantErr bool
 	}{
 		{"PlayDisc", func(p *Player) error { return p.PlayDisc("/dev/sr1") }, []string{"StartDiscPlayback /dev/sr1"}, false},
+		{"PlayURL", func(p *Player) error { return p.PlayURL("http://radio/stream") }, []string{"StartPlayback http://radio/stream"}, false},
 		{"Stop", func(p *Player) error { return p.Stop() }, []string{"Stop"}, false},
 		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda://"}, false},
 		// Playback is stopped before ejecting, even when the eject fails

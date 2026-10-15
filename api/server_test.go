@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,11 @@ type fakePlayer struct {
 
 func (f *fakePlayer) PlayDisc(drive string) error {
 	f.calls = append(f.calls, "play")
+	return f.err
+}
+
+func (f *fakePlayer) PlayURL(url string) error {
+	f.calls = append(f.calls, "play_url "+url)
 	return f.err
 }
 
@@ -42,7 +48,12 @@ func (f *fakePlayer) EjectDisc(drive string) error {
 
 func serve(t *testing.T, player Player, method, path string, header http.Header) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(method, path, nil)
+	return serveBody(t, player, method, path, header, "")
+}
+
+func serveBody(t *testing.T, player Player, method, path string, header http.Header, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	for k, v := range header {
 		req.Header[k] = v
 	}
@@ -72,6 +83,49 @@ func TestPlayerRoutes(t *testing.T) {
 				t.Errorf("calls = %v, want [%s]", player.calls, tt.call)
 			}
 		})
+	}
+}
+
+func TestStream(t *testing.T) {
+	jsonType := http.Header{"Content-Type": {"application/json"}}
+	tests := []struct {
+		name   string
+		header http.Header
+		body   string
+		code   int
+	}{
+		{"webradio", jsonType, `{"url": "https://stream.example.com/radio.mp3"}`, http.StatusAccepted},
+		{"no content type", nil, `{"url": "https://stream.example.com/radio.mp3"}`, http.StatusUnsupportedMediaType},
+		{"invalid json", jsonType, `{"url":`, http.StatusBadRequest},
+		{"missing url", jsonType, `{}`, http.StatusBadRequest},
+		{"local file", jsonType, `{"url": "file:///etc/passwd"}`, http.StatusBadRequest},
+		{"relative path", jsonType, `{"url": "Music/album"}`, http.StatusBadRequest},
+		{"too large", jsonType, `{"url": "https://` + strings.Repeat("a", maxRequestBodySize) + `"}`, http.StatusRequestEntityTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			player := &fakePlayer{}
+			rec := serveBody(t, player, http.MethodPost, "/player/stream/play", tt.header, tt.body)
+			if rec.Code != tt.code {
+				t.Errorf("status = %d, want %d (%s)", rec.Code, tt.code, rec.Body.String())
+			}
+			wantCalls := 0
+			if tt.code == http.StatusAccepted {
+				wantCalls = 1
+			}
+			if len(player.calls) != wantCalls {
+				t.Errorf("calls = %v, want %d", player.calls, wantCalls)
+			}
+		})
+	}
+}
+
+func TestStreamPassesURL(t *testing.T) {
+	player := &fakePlayer{}
+	serveBody(t, player, http.MethodPost, "/player/stream/play",
+		http.Header{"Content-Type": {"application/json"}}, `{"url": "http://radio.example.com:8000/live"}`)
+	if len(player.calls) != 1 || player.calls[0] != "play_url http://radio.example.com:8000/live" {
+		t.Errorf("calls = %v", player.calls)
 	}
 }
 

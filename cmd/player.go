@@ -227,7 +227,14 @@ func (p *Player) Close() {
 }
 
 // PlayDisc replaces the queue with the disc in drive and starts playback.
+// An empty drive stands for the drive holding an audio disc.
 func (p *Player) PlayDisc(drive string) error {
+	if drive == "" {
+		var err error
+		if drive, err = detect.FindAudioDisc(); err != nil {
+			return err
+		}
+	}
 	if err := hwcontrol.SetDiscSpeed(drive, p.discSpeed); err != nil {
 		log.Printf("warning: failed to set disc speed on %s: %v", drive, err)
 	}
@@ -245,8 +252,15 @@ func (p *Player) Stop() error {
 	return nil
 }
 
-// EjectDisc stops disc playback and ejects the disc in drive.
+// EjectDisc stops disc playback and ejects the disc in drive. An empty
+// drive stands for the drive holding a disc.
 func (p *Player) EjectDisc(drive string) error {
+	if drive == "" {
+		var err error
+		if drive, err = detect.FindDisc(); err != nil {
+			return err
+		}
+	}
 	// Stop first so MPD is not left reading a disc that is going away
 	if err := p.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)

@@ -50,6 +50,10 @@ func onAddDiscChecker(device *udev.Device) bool {
 	if device.Action() == EventRemove {
 		return false
 	}
+	return hasAudioTracks(device)
+}
+
+func hasAudioTracks(device *udev.Device) bool {
 	trackCount := device.PropertyValue("ID_CDROM_MEDIA_TRACK_COUNT_AUDIO")
 	return trackCount != ""
 }

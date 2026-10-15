@@ -206,6 +206,15 @@ func (p *Player) Close() {
 	p.wg.Wait()
 }
 
+// Play plays the drive holding an audio disc.
+func (p *Player) Play() error {
+	device, err := detect.FindAudioDisc()
+	if err != nil {
+		return err
+	}
+	return p.PlayDevice(device)
+}
+
 // PlayDevice replaces the queue with the disc in device and starts playback.
 func (p *Player) PlayDevice(device string) error {
 	if err := p.Client.StartDiscPlayback(device); err != nil {
@@ -220,6 +229,15 @@ func (p *Player) Stop() error {
 		return fmt.Errorf("error stopping playback: %w", err)
 	}
 	return nil
+}
+
+// Eject ejects the drive holding a disc.
+func (p *Player) Eject() error {
+	device, err := detect.FindDisc()
+	if err != nil {
+		return err
+	}
+	return p.EjectDevice(device)
 }
 
 // EjectDevice stops disc playback and ejects the disc in device.

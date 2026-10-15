@@ -26,6 +26,13 @@ func (s *Server) registerPlayerRoutes(p Player) {
 		"POST /player/disc/eject",
 		withDisc(p.EjectDisc),
 	)
+
+	s.mux.HandleFunc(
+		"POST /player/stream/play",
+		withBody(validateStream, func(w http.ResponseWriter, r *http.Request, req *streamRequest) {
+			handleActionError(w, p.PlayURL(req.URL))
+		}),
+	)
 }
 
 // handleActionError writes the HTTP response of a player action.

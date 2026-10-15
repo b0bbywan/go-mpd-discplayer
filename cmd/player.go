@@ -206,8 +206,24 @@ func (p *Player) Close() {
 	p.wg.Wait()
 }
 
-// Eject stops disc playback and ejects the disc.
-func (p *Player) Eject(device string) error {
+// PlayDevice replaces the queue with the disc in device and starts playback.
+func (p *Player) PlayDevice(device string) error {
+	if err := p.Client.StartDiscPlayback(device); err != nil {
+		return fmt.Errorf("error adding tracks: %w", err)
+	}
+	return nil
+}
+
+// Stop stops disc playback and removes the disc tracks from the queue.
+func (p *Player) Stop() error {
+	if err := p.Client.StopDiscPlayback(); err != nil {
+		return fmt.Errorf("error stopping disc playback: %w", err)
+	}
+	return nil
+}
+
+// EjectDevice stops disc playback and ejects the disc in device.
+func (p *Player) EjectDevice(device string) error {
 	// Stop first so MPD is not left reading a disc that is going away
 	if err := p.Client.StopDiscPlayback(); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)

@@ -14,17 +14,11 @@ const (
 func (player *Player) ExecuteAction(device, action string) error {
 	switch action {
 	case ActionPlay:
-		if err := player.Client.StartDiscPlayback(device); err != nil {
-			return fmt.Errorf("error adding tracks: %w", err)
-		}
-		return nil
+		return player.PlayDevice(device)
 	case ActionStop:
-		if err := player.Client.StopDiscPlayback(); err != nil {
-			return fmt.Errorf("error adding tracks: %w", err)
-		}
-		return nil
+		return player.Stop()
 	case ActionEject:
-		return player.Eject(device)
+		return player.EjectDevice(device)
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}

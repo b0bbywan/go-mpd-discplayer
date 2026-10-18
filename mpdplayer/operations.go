@@ -12,7 +12,10 @@ import (
 	"github.com/b0bbywan/go-disc-cuer/cue"
 )
 
-const CDDAPathPrefix = "cdda://"
+const (
+	CDDAPathPrefix = "cdda://"
+	udisksScheme   = "udisks://"
+)
 
 type PlaybackAction func(client *mpd.Client, device string) error
 
@@ -79,15 +82,29 @@ func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	})
 }
 
-func (rc *ReconnectingMPDClient) ClearMounts() error {
+// ClearStaleMounts unmounts udisks mounts whose storage matches none of the
+// identifiers of the devices currently plugged in. Other storages (nfs, smb...)
+// are left untouched.
+func (rc *ReconnectingMPDClient) ClearStaleMounts(present []string) error {
 	return rc.execute(func(client *mpd.Client) error {
 		mounts, err := listMounts(client)
 		if err != nil {
 			return fmt.Errorf("failed to list mounts: %w", err)
 		}
 
-		if err = checkMountsOrUnmount(client, mounts); err != nil {
-			return fmt.Errorf("failed to check or unmount: %w", err)
+		var errs []error
+		for _, m := range mounts {
+			storage, label := m["storage"], m["mount"]
+			if label == "" || !strings.HasPrefix(storage, udisksScheme) || containsAny(storage, present) {
+				continue
+			}
+			log.Printf("Unmounting stale mount %s (%s)", label, storage)
+			if err := unmount(client, label); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if len(errs) > 0 {
+			return fmt.Errorf("errors encountered while clearing mounts: %v", errs)
 		}
 		return nil
 	})
@@ -305,36 +322,11 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 	return res, nil
 }
 
-func checkMountsOrUnmount(client *mpd.Client, mounts []mpd.Attrs) error {
-	var errors []error
-	for _, v := range mounts {
-		if err := checkMountOrUnmount(client, v["storage"], v["mount"]); err != nil {
-			errors = append(errors, fmt.Errorf("failed to unmount %s: %w", v["mount"], err))
+func containsAny(s string, subs []string) bool {
+	for _, sub := range subs {
+		if sub != "" && strings.Contains(s, sub) {
+			return true
 		}
 	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("errors encountered while clearing mounts: %v", errors)
-	}
-	return nil
-}
-
-func checkMount(client *mpd.Client, storage, mount string) error {
-	if mount == "" {
-		return nil
-	}
-	if _, err := findNeighbor(client, []string{storage}); err != nil {
-		return fmt.Errorf("%s mount does not exists: %w", mount, err)
-	}
-	return nil
-}
-
-func checkMountOrUnmount(client *mpd.Client, storage, mount string) error {
-	if err := checkMount(client, storage, mount); err == nil {
-		return nil
-	}
-	if err := unmount(client, mount); err != nil {
-		return fmt.Errorf("failed to unmount %s: %w", mount, err)
-	}
-	return nil
+	return false
 }

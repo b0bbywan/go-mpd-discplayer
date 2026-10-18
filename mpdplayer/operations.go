@@ -62,6 +62,10 @@ func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
 
 func (rc *ReconnectingMPDClient) Mount(identifiers []string, label string) error {
 	return rc.execute(func(client *mpd.Client) error {
+		// MPD may have restored the mount from its state file
+		if isMounted(client, identifiers, label) {
+			return nil
+		}
 		neighborURI, err := findNeighbor(client, identifiers)
 		if err != nil {
 			return fmt.Errorf("failed to find neighbor for %v: %w", identifiers, err)
@@ -320,6 +324,21 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 		return nil, fmt.Errorf("failed to list MPD mounts: %w", err)
 	}
 	return res, nil
+}
+
+// isMounted reports whether label is already mounted on a storage matching
+// one of the identifiers.
+func isMounted(client *mpd.Client, identifiers []string, label string) bool {
+	mounts, err := listMounts(client)
+	if err != nil {
+		return false
+	}
+	for _, m := range mounts {
+		if m["mount"] == label && containsAny(m["storage"], identifiers) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsAny(s string, subs []string) bool {

@@ -28,6 +28,10 @@ func newSymlinkFinder(mpdLibraryFolder, mpdUSBFolder string) *SymlinkFinder {
 }
 
 func (s *SymlinkFinder) validate(device *udev.Device, mountpoint, target string) (string, error) {
+	// Reuse the symlink kept from a previous run
+	if path, err := s.symlinkCache.GetCache(device.Devnode()); err == nil && checkSymlink(mountpoint, path) == nil {
+		return path, nil
+	}
 	return s.createSymlink(device, mountpoint, target)
 }
 

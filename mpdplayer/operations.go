@@ -77,6 +77,16 @@ func (rc *ReconnectingMPDClient) Mount(identifiers []string, label string) error
 	})
 }
 
+// UpdateDB triggers a database update of uri without waiting for it.
+func (rc *ReconnectingMPDClient) UpdateDB(uri string) error {
+	return rc.execute(func(client *mpd.Client) error {
+		if _, err := client.Update(uri); err != nil {
+			return fmt.Errorf("failed to update database: %w", err)
+		}
+		return nil
+	})
+}
+
 func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
 		if err := unmount(client, label); err != nil {

@@ -15,13 +15,16 @@ type Handler interface {
 	Handles(kind detect.DeviceKind) bool
 	OnAdd(ctx context.Context, dev detect.Device) error
 	OnRemove(ctx context.Context, dev detect.Device) error
+	// OnPresent handles a device already plugged in at startup
+	OnPresent(ctx context.Context, dev detect.Device) error
 }
 
 type BasicHandler struct {
 	kind detect.DeviceKind
 	// processFunc est défini par l’utilisateur
-	processAdd    func(context.Context, detect.Device) error
-	processRemove func(context.Context, detect.Device) error
+	processAdd     func(context.Context, detect.Device) error
+	processRemove  func(context.Context, detect.Device) error
+	processPresent func(context.Context, detect.Device) error
 }
 
 func (h *BasicHandler) Handles(kind detect.DeviceKind) bool {
@@ -42,14 +45,22 @@ func (h *BasicHandler) OnRemove(ctx context.Context, dev detect.Device) error {
 	return nil
 }
 
+func (h *BasicHandler) OnPresent(ctx context.Context, dev detect.Device) error {
+	if h.processPresent != nil {
+		return h.processPresent(ctx, dev)
+	}
+	return nil
+}
+
 // Handler Constructor
 func NewBasicHandler(kind detect.DeviceKind,
-	processAdd, processRemove func(context.Context, detect.Device) error) *BasicHandler {
+	processAdd, processRemove, processPresent func(context.Context, detect.Device) error) *BasicHandler {
 
 	return &BasicHandler{
-		kind:          kind,
-		processAdd:    processAdd,
-		processRemove: processRemove,
+		kind:           kind,
+		processAdd:     processAdd,
+		processRemove:  processRemove,
+		processPresent: processPresent,
 	}
 }
 
@@ -73,6 +84,8 @@ func (player *Player) newDiscHandler() {
 			}
 			return nil
 		},
+		// processPresent: no autoplay at startup
+		nil,
 	)
 
 	player.handlers = append(player.handlers, discHandler)
@@ -101,6 +114,18 @@ func (player *Player) newUSBHandler() {
 			if err = player.Client.StopPlayback(relPath); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s USB playback: %w", detect.DeviceUSB, dev.Path(), err)
 			}
+			return nil
+		},
+		// processPresent: mount and refresh the library, without touching the queue
+		func(ctx context.Context, dev detect.Device) error {
+			relPath, err := player.Mounter.Mount(dev.Udev())
+			if err != nil {
+				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+			}
+			if err = player.Client.UpdateDB(relPath); err != nil {
+				return fmt.Errorf("[%s] Error updating database for %s:%s: %w", detect.DeviceUSB, dev.Path(), relPath, err)
+			}
+			log.Printf("[%s] %s available at %s", detect.DeviceUSB, dev.Path(), relPath)
 			return nil
 		},
 	)

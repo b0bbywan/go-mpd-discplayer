@@ -184,6 +184,8 @@ func (p *Player) dispatch(ev detect.DeviceEvent) {
 		case detect.DeviceRemoved:
 			p.NotifyEvent(notifications.EventRemove)
 			err = h.OnRemove(p.ctx, ev.Device)
+		case detect.DevicePresent:
+			err = h.OnPresent(p.ctx, ev.Device)
 		}
 		if err != nil {
 			p.NotifyEvent(notifications.EventError)

@@ -16,6 +16,8 @@ const (
 	InvalidEvent  EventType = "invalid"
 	DeviceAdded   EventType = EventAdd
 	DeviceRemoved EventType = EventRemove
+	// DevicePresent is emitted at startup for devices already plugged in.
+	DevicePresent EventType = "present"
 
 	DeviceDisc DeviceKind = "disc"
 	DeviceUSB  DeviceKind = "usb"

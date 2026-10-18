@@ -17,8 +17,13 @@ type mpdFinder struct {
 }
 
 func newMpdFinder(client *mpdplayer.ReconnectingMPDClient, mpdLibraryFolder string) (*mpdFinder, error) {
-	if err := client.ClearMounts(); err != nil {
-		return nil, fmt.Errorf("failed to clear mounts: %w", err)
+	// Mounts of devices still plugged in are kept (MPD restores them from its
+	// state file), the others are removed. Rely on udev rather than MPD
+	// neighbors, which may not list the devices yet at boot.
+	if present, err := presentIdentifiers(); err != nil {
+		log.Printf("Skipping stale mounts cleanup: %v", err)
+	} else if err := client.ClearStaleMounts(present); err != nil {
+		log.Printf("warning: %v", err)
 	}
 	return &mpdFinder{
 		client:           client,
@@ -60,6 +65,24 @@ func (m *mpdFinder) mountWithRetry(identifiers []string, label string) error {
 			return err
 		}
 	}
+}
+
+// presentIdentifiers returns the identifiers of all block devices currently known to udev.
+func presentIdentifiers() ([]string, error) {
+	u := udev.Udev{}
+	e := u.NewEnumerate()
+	if err := e.AddMatchSubsystem("block"); err != nil {
+		return nil, fmt.Errorf("failed to add filter: %w", err)
+	}
+	devices, err := e.Devices()
+	if err != nil {
+		return nil, fmt.Errorf("failed to enumerate block devices: %w", err)
+	}
+	var ids []string
+	for _, dev := range devices {
+		ids = append(ids, neighborIdentifiers(dev)...)
+	}
+	return ids, nil
 }
 
 func neighborIdentifiers(device *udev.Device) []string {

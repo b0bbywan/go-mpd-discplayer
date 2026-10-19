@@ -93,9 +93,9 @@ func (player *Player) newUSBHandler() {
 		detect.DeviceUSB,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			relPath, err := player.Mounter.Mount(dev.Udev())
+			relPath, err := player.mountUSB(dev)
 			if err != nil {
-				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+				return err
 			}
 			if err = player.Client.StartUSBPlayback(relPath); err != nil {
 				return fmt.Errorf("[%s] Error starting %s:%s USB playback: %w", detect.DeviceUSB, dev.Path(), relPath, err)
@@ -115,9 +115,9 @@ func (player *Player) newUSBHandler() {
 		},
 		// processPresent: mount and refresh the library, without touching the queue
 		func(ctx context.Context, dev detect.Device) error {
-			relPath, err := player.Mounter.Mount(dev.Udev())
+			relPath, err := player.mountUSB(dev)
 			if err != nil {
-				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+				return err
 			}
 			if err = player.Client.UpdateDB(relPath); err != nil {
 				return fmt.Errorf("[%s] Error updating database for %s:%s: %w", detect.DeviceUSB, dev.Path(), relPath, err)
@@ -128,4 +128,13 @@ func (player *Player) newUSBHandler() {
 	)
 
 	player.handlers = append(player.handlers, usbHandler)
+}
+
+// mountUSB exposes dev to MPD and returns its path in the library.
+func (player *Player) mountUSB(dev detect.Device) (string, error) {
+	relPath, err := player.Mounter.Mount(dev.Udev())
+	if err != nil {
+		return "", fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+	}
+	return relPath, nil
 }

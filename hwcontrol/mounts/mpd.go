@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"time"
 
 	"github.com/jochenvg/go-udev"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/blockdev"
+	"github.com/b0bbywan/go-mpd-discplayer/internal/retry"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -50,22 +50,13 @@ func (m *mpdFinder) mount(device *udev.Device, mountpoint, target string) (strin
 }
 
 func (m *mpdFinder) mountWithRetry(identifiers []string, label string) error {
-	ticker := time.NewTicker(RetryInterval)
-	defer ticker.Stop()
-	timeoutChan := time.After(2 * RetryTimeout)
-
-	for {
+	return retry.Until(2*RetryTimeout, RetryInterval, func() error {
 		err := m.client.Mount(identifiers, label)
-		if err == nil {
-			return nil
-		}
-		select {
-		case <-ticker.C:
+		if err != nil {
 			log.Printf("Polling for neighbor matching %v...", identifiers)
-		case <-timeoutChan:
-			return err
 		}
-	}
+		return err
+	})
 }
 
 // presentIdentifiers returns the identifiers of all block devices currently known to udev.

@@ -47,6 +47,18 @@ func TestStartUSBPlayback(t *testing.T) {
 	assertCommands(t, f, "clear", "update MYUSB", "status", "add MYUSB", "play")
 }
 
+func TestStartUSBPlaybackWaitsForUpdate(t *testing.T) {
+	f := newFakeMPD()
+	f.updating = 2
+	client := f.start(t)
+
+	if err := client.StartUSBPlayback("MYUSB"); err != nil {
+		t.Fatal(err)
+	}
+	// The files are added once the update is over
+	assertCommands(t, f, "clear", "update MYUSB", "status", "status", "status", "add MYUSB", "play")
+}
+
 func TestStopAndRemove(t *testing.T) {
 	queue := []string{"cdda:///1", "usb/a.flac", "cdda:///2", "cdda:///3", "usb/b.flac", "cdda:///4"}
 	tests := []struct {

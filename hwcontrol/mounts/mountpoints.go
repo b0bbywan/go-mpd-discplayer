@@ -9,6 +9,7 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
+	"github.com/b0bbywan/go-mpd-discplayer/internal/retry"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -145,21 +146,18 @@ func (m *MountManager) mountOS(device *udev.Device) (string, error) {
 }
 
 func (m *MountManager) findMountPointWithRetry(device string, timeout, interval time.Duration) (string, error) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	timeoutChan := time.After(timeout)
-	for {
-		if mountPoint, err := seekMountPoint(device); err == nil {
-			m.mountPoints.AddCache(device, mountPoint)
-			return mountPoint, nil
-		}
-		select {
-		case <-ticker.C:
+	var mountPoint string
+	if err := retry.Until(timeout, interval, func() error {
+		var err error
+		if mountPoint, err = seekMountPoint(device); err != nil {
 			log.Printf("Polling for %s mount point...", device)
-		case <-timeoutChan:
-			return "", fmt.Errorf("device %s not found within timeout", device)
 		}
+		return err
+	}); err != nil {
+		return "", fmt.Errorf("device %s not found within timeout: %w", device, err)
 	}
+	m.mountPoints.AddCache(device, mountPoint)
+	return mountPoint, nil
 }
 
 func (m *MountManager) seekMountPointWithCacheFallback(device string) (string, error) {

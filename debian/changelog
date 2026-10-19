@@ -1,3 +1,55 @@
+mpd-discplayer (0.9.0) trixie; urgency=low
+
+  * Add --eject CLI action: stop disc playback, remove the CD tracks from
+    the queue and eject the disc
+  * Mount USB devices already plugged in at startup, without autoplay
+  * Keep MPD mounts of devices still plugged in at startup and only clear
+    stale udisks mounts, other storages (nfs, smb) are left untouched
+  * Skip MPD mount when the label is already mounted
+  * Reuse a valid symlink kept from a previous run
+  * Document CLI options
+  * Bump golang.org/x/sys to 0.49.0, oto to 3.5.1 and pulse to 0.1.3
+  * CI: build with Go 1.25, lint with Go 1.26, actions/setup-go 7
+
+ -- Mathieu Réquillart <mathieu.requillart@gmail.com>  Mon, 19 Oct 2026 00:00:00 +0200
+
+
+mpd-discplayer (0.8.0) trixie; urgency=low
+
+  * Update go-disc-cuer to v0.4.0 (refactored Generator API):
+    - GNUDB: rejoin track titles split over several TTITLE lines
+    - MusicBrainz: guard against empty release data
+    - Redact the GNUDB hello= email from logged URLs
+  * Add a golangci-lint and gofmt CI workflow and fix its findings
+  * Bump golang.org/x/sys to 0.47.0 and pulse to 0.1.2
+
+ -- Mathieu Réquillart <mathieu.requillart@gmail.com>  Wed, 08 Jul 2026 00:00:00 +0200
+
+
+mpd-discplayer (0.7.3) trixie; urgency=low
+
+  * Fall back to the UUID when a USB device has no filesystem label
+  * Retry MPD mount to handle udisks neighbor registration delay
+  * Find MPD neighbor by UUID or serial instead of UUID only
+  * Split mount/unmount into MPD and OS-specific methods
+  * Check the filesystem type when the partition entry type is unavailable
+  * Document the polkit rule for headless systems
+  * Bump golang.org/x/sys to 0.42.0
+
+ -- Mathieu Réquillart <mathieu.requillart@gmail.com>  Wed, 01 Apr 2026 00:00:00 +0200
+
+
+mpd-discplayer (0.7.2) trixie; urgency=low
+
+  * Switch deb packaging to nfpm
+  * Publish packages to the odio apt repository
+  * Add GitHub CI and a docker build with Makefile
+  * Inject the app version through ldflags
+  * Bump viper to 1.21.0, golang.org/x/sys to 0.41.0 and cron to 3.0.1
+
+ -- Mathieu Réquillart <mathieu.requillart@gmail.com>  Sat, 07 Mar 2026 00:00:00 +0100
+
+
 mpd-discplayer (0.7.2~rc.2) trixie; urgency=low
 
   * Publish deb packages

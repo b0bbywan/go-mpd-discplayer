@@ -1,6 +1,7 @@
 package mpdplayer
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+
+	"github.com/b0bbywan/go-mpd-discplayer/internal/retry"
 )
 
 const (
@@ -276,21 +279,16 @@ func UpdateDBAndWait(client *mpd.Client, label string) error {
 	if _, err := client.Update(label); err != nil {
 		return fmt.Errorf("failed to update database: %w", err)
 	}
-	timeout := 30 * time.Second
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	timeoutChan := time.After(timeout)
-	for {
-		if !DbUpdating(client) {
-			log.Println("Database update finished.")
-			return nil
+	if err := retry.Until(30*time.Second, 500*time.Millisecond, func() error {
+		if DbUpdating(client) {
+			return errors.New("database did not finish update within timeout")
 		}
-		select {
-		case <-ticker.C:
-		case <-timeoutChan:
-			return fmt.Errorf("database did not finish update within timeout")
-		}
+		return nil
+	}); err != nil {
+		return err
 	}
+	log.Println("Database update finished.")
+	return nil
 }
 
 func DbUpdating(client *mpd.Client) bool {

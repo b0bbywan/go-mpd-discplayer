@@ -10,7 +10,7 @@ const (
 	ActionEject = "eject"
 )
 
-// executeAction handles the main logic for each action (add or remove).
+// ExecuteAction runs a CLI action. device is the drive used by play and eject.
 func (player *Player) ExecuteAction(device, action string) error {
 	switch action {
 	case ActionPlay:

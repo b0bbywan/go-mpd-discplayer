@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jochenvg/go-udev"
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
@@ -27,14 +28,31 @@ const (
 
 var AppVersion = "dev"
 
+// playerClient is the part of the MPD client the player drives.
+type playerClient interface {
+	StartDiscPlayback(device string) error
+	StartUSBPlayback(label string) error
+	StartPlayback(uri string) error
+	Stop() error
+	StopAndRemove(prefix string) error
+	UpdateDB(uri string) error
+	Disconnect()
+}
+
+// deviceMounter exposes USB devices to MPD.
+type deviceMounter interface {
+	Mount(device *udev.Device) (string, error)
+	Unmount(device *udev.Device) (string, error)
+}
+
 type Player struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        *sync.WaitGroup
 	discSpeed int
-	Client    *mpdplayer.ReconnectingMPDClient
+	Client    playerClient
 	Notifier  *notifications.Notifier
-	Mounter   *mounts.MountManager
+	Mounter   deviceMounter
 	scheduler *scheduler
 	handlers  []Handler
 }

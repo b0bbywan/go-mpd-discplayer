@@ -308,11 +308,8 @@ func findNeighbor(client *mpd.Client, identifiers []string) (string, error) {
 		return "", fmt.Errorf("failed to list neighbors, is udisk neighbor plugin enabled?: %w", err)
 	}
 	for _, v := range res {
-		uri := v["neighbor"]
-		for _, id := range identifiers {
-			if strings.Contains(uri, id) {
-				return uri, nil
-			}
+		if uri := v["neighbor"]; containsAny(uri, identifiers) {
+			return uri, nil
 		}
 	}
 	var neighbors []string

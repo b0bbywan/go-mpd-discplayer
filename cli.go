@@ -27,6 +27,7 @@ var actionFailures = map[string]string{
 	cmd.ActionMountEject: "Failed to unmount USB storage",
 	cmd.ActionStreamPlay: "Failed to play stream",
 	cmd.ActionStop:       "Failed to stop playback",
+	cmd.ActionStatus:     "Failed to read status",
 }
 
 // legacyActions maps the deprecated action flags to their command.
@@ -86,11 +87,13 @@ func parseArgs(fs *flag.FlagSet, args []string) (options, error) {
 }
 
 // parseCommand parses a command and its arguments: disc play|stop|eject,
-// mount list|play|stop|eject, stream play <url> or stop.
+// mount list|play|stop|eject, stream play <url>, stop or status.
 func parseCommand(fs *flag.FlagSet, args []string, device string) (cmd.Action, error) {
 	switch {
 	case args[0] == "stop" && len(args) == 1:
 		return cmd.Action{Name: cmd.ActionStop}, nil
+	case args[0] == "status" && len(args) == 1:
+		return cmd.Action{Name: cmd.ActionStatus}, nil
 	case args[0] == "mount" && len(args) == 2 && args[1] == "list":
 		return cmd.Action{Name: cmd.ActionMountList}, nil
 	case args[0] == "mount" && len(args) == 3 && slices.Contains([]string{"play", "stop", "eject"}, args[1]):
@@ -149,6 +152,7 @@ Commands:
   mount eject <name>               Stop the USB storage playback and unmount it from MPD
   stream play <url>                Play a URL, a webradio for instance
   stop                             Stop playback, whatever is playing
+  status                           Print the playback state and the USB storages mounted in MPD
 
 Options:
   --device <device>   Disc device used by disc play and disc eject (default: the drive holding a disc)

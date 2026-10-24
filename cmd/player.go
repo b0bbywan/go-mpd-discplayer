@@ -38,6 +38,7 @@ type playerClient interface {
 	StopIfPlaying(prefix string) error
 	StopAndRemove(prefix string) error
 	USBMounts() ([]mpdplayer.Mount, error)
+	Status() (mpdplayer.Status, error)
 	Unmount(label string) error
 	UpdateDB(uri string) error
 	Disconnect()
@@ -280,6 +281,15 @@ func (p *Player) Mounts() ([]mpdplayer.Mount, error) {
 		return nil, fmt.Errorf("error listing mounts: %w", err)
 	}
 	return mounts, nil
+}
+
+// Status reads the playback state and the USB storages mounted in MPD.
+func (p *Player) Status() (mpdplayer.Status, error) {
+	status, err := p.Client.Status()
+	if err != nil {
+		return mpdplayer.Status{}, fmt.Errorf("error reading status: %w", err)
+	}
+	return status, nil
 }
 
 // PlayMount replaces the queue with the files of the USB storage mounted as

@@ -211,7 +211,7 @@ func (p *Player) Close() {
 // Eject stops disc playback and ejects the disc.
 func (p *Player) Eject(device string) error {
 	// Stop first so MPD is not left reading a disc that is going away
-	if err := p.Client.StopDiscPlayback(); err != nil {
+	if err := p.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)
 	}
 	if err := hwcontrol.EjectDisc(device); err != nil {

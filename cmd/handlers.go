@@ -7,6 +7,7 @@ import (
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 // Handler defines a stateless handler capable of handling one type of  device.
@@ -79,7 +80,7 @@ func (player *Player) newDiscHandler() {
 		},
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
-			if err := player.Client.StopDiscPlayback(); err != nil {
+			if err := player.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
@@ -111,7 +112,7 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
 			}
-			if err = player.Client.StopPlayback(relPath); err != nil {
+			if err = player.Client.StopAndRemove(relPath); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s USB playback: %w", detect.DeviceUSB, dev.Path(), err)
 			}
 			return nil

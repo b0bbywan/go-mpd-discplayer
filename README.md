@@ -115,21 +115,109 @@ Once installed, `mpd-discplayer` automatically detects devices and interacts wit
 ./mpd-discplayer
 ```
 
-### Command-line Options
-Without option, `mpd-discplayer` runs as a daemon. The following options run a single action on the disc player and exit, using the same configuration and MPD connection as the daemon. Only one of `--play`, `--stop` and `--eject` can be used at a time.
+### Command-line Commands
+Without command, `mpd-discplayer` runs as a daemon. The following commands run a single action on the disc player and exit, using the same configuration and MPD connection as the daemon.
+
+| Command | Description |
+|---|---|
+| `disc play [--device <device>]` | Clear the MPD queue, load the disc (from its CUE file when available, as individual CDDA tracks otherwise) and start playback |
+| `disc stop` | Stop playback if a disc track is playing. The queue is left untouched |
+| `disc eject [--device <device>]` | Stop playback if a disc track is playing, remove the disc tracks from the queue, then eject the disc. Useful for drives without an eject button, or to eject from a UI |
+| `mount list` | List the USB storages mounted in MPD, one per line: the mount name, then the storage |
+| `mount play <name>` | Clear the MPD queue, load the files of the USB storage mounted as `<name>` and start playback |
+| `mount stop <name>` | Stop playback if a file of the USB storage is playing. The queue is left untouched |
+| `mount eject <name>` | Stop playback if a file of the USB storage is playing, remove its files from the queue, then unmount it from MPD, so it can be unplugged safely |
+| `stream play <url>` | Clear the MPD queue, add the URL, a webradio for instance, and start playback |
+| `stop` | Stop playback, whatever is playing. The queue is left untouched |
+| `status` | Print the playback state, one `key: value` per line with the keys of [`GET /player/status`](#web-api) and leaving out what is missing, then one `mounts: <name>\t<storage>` line per USB storage mounted in MPD |
 
 | Option | Description |
 |---|---|
-| `--play` | Clear the MPD queue, load the disc (from its CUE file when available, as individual CDDA tracks otherwise) and start playback |
-| `--stop` | Stop playback if a disc track is playing and remove the disc tracks from the queue |
-| `--eject` | Same as `--stop`, then eject the disc. Useful for drives without an eject button, or to eject from a UI |
-| `--device <device>` | Disc device used by `--play` and `--eject` (default: `/dev/sr0`) |
+| `--device <device>` | Disc device used by `disc play` and `disc eject` (default: the drive holding an audio disc for `disc play`, a disc of any kind for `disc eject`; fails when no drive or several drives hold one) |
 | `--version` | Print version and exit |
 | `-h`, `--help` | Display help |
 
 ```bash
-./mpd-discplayer --eject
-./mpd-discplayer --play --device /dev/sr1
+./mpd-discplayer disc eject
+./mpd-discplayer disc play --device /dev/sr1
+./mpd-discplayer stream play https://stream.example.com/radio.mp3
+./mpd-discplayer mount eject MYUSB
+./mpd-discplayer status
+```
+
+```
+$ ./mpd-discplayer status
+state: play
+source: disc
+title: Bruxelles
+artist: Benabar
+album: Reprise des negociations
+position: 4
+length: 12
+elapsed: 102.3
+duration: 224
+mounts: MUSIC	udisks://by-uuid-3A4F-1C2B
+```
+
+The `mount` commands only see USB storages mounted by MPD, with `MountConfig: mpd`. With the `symlink` method, MPD mounts nothing: `mount list` is empty and the other `mount` commands fail.
+
+The options `--play`, `--stop` and `--eject` of previous versions still work but are deprecated: use `disc play`, `stop` and `disc eject` instead.
+
+### Web API
+When enabled (see [Web API Options](#web-api-options)), the daemon exposes the same actions over HTTP. Like the commands without `--device`, the API finds the drive holding the disc:
+
+| Route | Action |
+|---|---|
+| `POST /player/disc/play` | Same as `disc play`, on the drive holding an audio disc |
+| `POST /player/disc/stop` | Same as `disc stop` |
+| `POST /player/disc/eject` | Same as `disc eject`, on the drive holding a disc of any kind |
+| `GET /player/mounts` | Same as `mount list`, as JSON: `[{"name": "MYUSB", "storage": "udisks://..."}]` |
+| `POST /player/mounts/{name}/play` | Same as `mount play <name>` |
+| `POST /player/mounts/{name}/stop` | Same as `mount stop <name>` |
+| `POST /player/mounts/{name}/eject` | Same as `mount eject <name>` |
+| `POST /player/stream/play` | Same as `stream play`, for an `http` or `https` URL only. JSON body: `{"url": "<url>"}` |
+| `POST /player/stop` | Same as `stop` |
+| `GET /player/status` | Same as `status`, as JSON (see below) |
+
+With the `symlink` mount method, the mount list is empty and the other mount routes answer `404`.
+
+`GET /player/status` reads the state from MPD:
+
+```json
+{
+  "playback": {
+    "state": "play",
+    "source": "disc",
+    "mount": null,
+    "title": "Bruxelles",
+    "artist": "Benabar",
+    "album": "Reprise des negociations",
+    "name": null,
+    "url": null,
+    "position": 4,
+    "length": 12,
+    "elapsed": 102.3,
+    "duration": 224
+  },
+  "mounts": [{"name": "MUSIC", "storage": "udisks://by-uuid-3A4F-1C2B"}]
+}
+```
+
+- `state`: `play`, `pause` or `stop`.
+- `source`: where the current song comes from: `disc`, `mount` (its name in `mount`), `stream` (its URL in `url`, the station name in `name` when the webradio sends one) or `library`.
+- `position`: position of the current song in the queue, from 1; `length`: number of songs in the queue.
+- `elapsed` and `duration` are in seconds; `duration` is `null` for a stream.
+- A field is `null` when there is no current song, or when the tag is missing.
+
+A successful action answers `202 Accepted`. When no drive or several drives hold a disc, it answers `409 Conflict`, an unknown mount name `404`, an invalid request body `400`, `413` or `415`, other failures `500`, with the error as plain text. CORS allows any origin.
+
+```bash
+curl -X POST http://127.0.0.1:8019/player/disc/eject
+curl http://127.0.0.1:8019/player/status
+curl http://127.0.0.1:8019/player/mounts
+curl -X POST http://127.0.0.1:8019/player/mounts/MYUSB/play
+curl -X POST -H 'Content-Type: application/json' -d '{"url": "https://stream.example.com/radio.mp3"}' http://127.0.0.1:8019/player/stream/play
+curl -X POST --unix-socket /run/user/1000/mpd-discplayer.sock http://localhost/player/disc/eject
 ```
 
 ### Using Systemd (Optional)
@@ -231,6 +319,11 @@ MountConfig: "mpd"
 MPDCueSubfolder: ".disc-cuer"
 MPDUSBSubfolder: ".udisks"
 Schedule: {}
+API:
+  Enabled: false
+  Bind: "127.0.0.1"
+  Port: 8019
+  Socket: ""
 
 ```
 
@@ -283,6 +376,13 @@ Note: Ensure that the `usb_label` matches the label of the USB device. For audio
 - **AudioBackend**: `"pulse"` *(default)*, `"alsa"` or `"none` (disable notifications).
 - **PulseServer**: Check [Pulseaudio Server String doc](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/ServerStrings/)
 - **SoundsLocation**: `"/usr/local/share/mpd-discplayer"` *(default)*. No default sounds are provided at the moment. Notifications expect `in.pcm`, `out.pcm` and `error.pcm` to be present in the specified folder or notifications will be disabled.
+
+#### Web API Options
+The web API is disabled by default. Under the `API` key:
+- **Enabled**: `false` *(default)*. Set to `true` to start the web API with the daemon.
+- **Bind**: `"127.0.0.1"` *(default)*. Address of the TCP listener, `"0.0.0.0"` to listen on all interfaces.
+- **Port**: `8019` *(default)*. Port of the TCP listener, `0` disables it.
+- **Socket**: `""` *(default, none)*. Unix socket to serve on too, for a reverse proxy running as the same user. A socket left behind by a previous run is replaced.
 
 ### Environment Variables
 

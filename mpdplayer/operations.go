@@ -1,8 +1,10 @@
 package mpdplayer
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+
+	"github.com/b0bbywan/go-mpd-discplayer/internal/retry"
 )
 
 const (
@@ -45,18 +49,32 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 	})
 }
 
-func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
-	return rc.StopPlayback(CDDAPathPrefix)
+// Stop stops playback, whatever is playing. The queue is left untouched.
+func (rc *ReconnectingMPDClient) Stop() error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := client.Stop(); err != nil {
+			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+		}
+		return nil
+	})
 }
 
-func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
+// StopIfPlaying stops playback when the current song path starts with
+// prefix. The queue is left untouched.
+func (rc *ReconnectingMPDClient) StopIfPlaying(prefix string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if checkPathPlaying(client, label) {
-			if err := client.Stop(); err != nil {
-				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-			}
+		return stopIfPlaying(client, prefix)
+	})
+}
+
+// StopAndRemove stops playback when the current song path starts with
+// prefix, then removes the songs under prefix from the queue.
+func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := stopIfPlaying(client, prefix); err != nil {
+			return err
 		}
-		return deleteFromPlaylist(client, label)
+		return deleteFromPlaylist(client, prefix)
 	})
 }
 
@@ -87,8 +105,41 @@ func (rc *ReconnectingMPDClient) UpdateDB(uri string) error {
 	})
 }
 
+// Mount is a USB storage mounted in MPD.
+type Mount struct {
+	Name    string // mount path in the MPD library
+	Storage string // udisks URI
+}
+
+// USBMounts lists the USB storages mounted in MPD. Other storages (nfs,
+// smb...) are left out.
+func (rc *ReconnectingMPDClient) USBMounts() ([]Mount, error) {
+	var usb []Mount
+	err := rc.execute(func(client *mpd.Client) error {
+		var err error
+		usb, err = usbMounts(client)
+		return err
+	})
+	return usb, err
+}
+
+// MountPrefix is the path prefix of the files of the mount named name, the
+// trailing slash keeping MYUSB from matching MYUSB2.
+func MountPrefix(name string) string {
+	return name + "/"
+}
+
+// Unmount unmounts label from MPD. A label already unmounted, by an eject
+// from the API for instance, is not an error.
 func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
+		mounts, err := listMounts(client)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(mounts, func(m mpd.Attrs) bool { return m["mount"] == label }) {
+			return nil
+		}
 		if err := unmount(client, label); err != nil {
 			return fmt.Errorf("failed to unmount %s: %w", label, err)
 		}
@@ -201,6 +252,16 @@ func addTracks(client *mpd.Client, trackCount int) error {
 	return nil
 }
 
+func stopIfPlaying(client *mpd.Client, label string) error {
+	if !checkPathPlaying(client, label) {
+		return nil
+	}
+	if err := client.Stop(); err != nil {
+		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+	}
+	return nil
+}
+
 func checkPathPlaying(client *mpd.Client, checkPath string) bool {
 	song, err := client.CurrentSong()
 	if err != nil {
@@ -268,21 +329,16 @@ func UpdateDBAndWait(client *mpd.Client, label string) error {
 	if _, err := client.Update(label); err != nil {
 		return fmt.Errorf("failed to update database: %w", err)
 	}
-	timeout := 30 * time.Second
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	timeoutChan := time.After(timeout)
-	for {
-		if !DbUpdating(client) {
-			log.Println("Database update finished.")
-			return nil
+	if err := retry.Until(30*time.Second, 500*time.Millisecond, func() error {
+		if DbUpdating(client) {
+			return errors.New("database did not finish update within timeout")
 		}
-		select {
-		case <-ticker.C:
-		case <-timeoutChan:
-			return fmt.Errorf("database did not finish update within timeout")
-		}
+		return nil
+	}); err != nil {
+		return err
 	}
+	log.Println("Database update finished.")
+	return nil
 }
 
 func DbUpdating(client *mpd.Client) bool {
@@ -300,11 +356,8 @@ func findNeighbor(client *mpd.Client, identifiers []string) (string, error) {
 		return "", fmt.Errorf("failed to list neighbors, is udisk neighbor plugin enabled?: %w", err)
 	}
 	for _, v := range res {
-		uri := v["neighbor"]
-		for _, id := range identifiers {
-			if strings.Contains(uri, id) {
-				return uri, nil
-			}
+		if uri := v["neighbor"]; containsAny(uri, identifiers) {
+			return uri, nil
 		}
 	}
 	var neighbors []string
@@ -334,6 +387,20 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 		return nil, fmt.Errorf("failed to list MPD mounts: %w", err)
 	}
 	return res, nil
+}
+
+func usbMounts(client *mpd.Client) ([]Mount, error) {
+	mounts, err := listMounts(client)
+	if err != nil {
+		return nil, err
+	}
+	var usb []Mount
+	for _, m := range mounts {
+		if m["mount"] != "" && strings.HasPrefix(m["storage"], udisksScheme) {
+			usb = append(usb, Mount{Name: m["mount"], Storage: m["storage"]})
+		}
+	}
+	return usb, nil
 }
 
 // isMounted reports whether label is already mounted on a storage matching

@@ -47,20 +47,32 @@ func TestStartUSBPlayback(t *testing.T) {
 	assertCommands(t, f, "clear", "update MYUSB", "status", "add MYUSB", "play")
 }
 
-func TestStopPlayback(t *testing.T) {
+func TestStartUSBPlaybackWaitsForUpdate(t *testing.T) {
+	f := newFakeMPD()
+	f.updating = 2
+	client := f.start(t)
+
+	if err := client.StartUSBPlayback("MYUSB"); err != nil {
+		t.Fatal(err)
+	}
+	// The files are added once the update is over
+	assertCommands(t, f, "clear", "update MYUSB", "status", "status", "status", "add MYUSB", "play")
+}
+
+func TestStopAndRemove(t *testing.T) {
 	queue := []string{"cdda:///1", "usb/a.flac", "cdda:///2", "cdda:///3", "usb/b.flac", "cdda:///4"}
 	tests := []struct {
 		name      string
-		label     string
+		prefix    string
 		current   int
 		wantStop  bool
 		wantQueue []string
 	}{
-		{"label playing", CDDAPathPrefix, 2, true, []string{"usb/a.flac", "usb/b.flac"}},
+		{"prefix playing", CDDAPathPrefix, 2, true, []string{"usb/a.flac", "usb/b.flac"}},
 		{"other playing", CDDAPathPrefix, 1, false, []string{"usb/a.flac", "usb/b.flac"}},
 		{"nothing playing", CDDAPathPrefix, -1, true, []string{"usb/a.flac", "usb/b.flac"}},
-		{"usb label", "usb", 0, false, []string{"cdda:///1", "cdda:///2", "cdda:///3", "cdda:///4"}},
-		{"label absent", "nas", 0, false, queue},
+		{"usb prefix", "usb", 0, false, []string{"cdda:///1", "cdda:///2", "cdda:///3", "cdda:///4"}},
+		{"prefix absent", "nas", 0, false, queue},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,7 +81,7 @@ func TestStopPlayback(t *testing.T) {
 			f.current = tt.current
 			client := f.start(t)
 
-			if err := client.StopPlayback(tt.label); err != nil {
+			if err := client.StopAndRemove(tt.prefix); err != nil {
 				t.Fatal(err)
 			}
 			stopped := false
@@ -84,16 +96,40 @@ func TestStopPlayback(t *testing.T) {
 	}
 }
 
-func TestStopDiscPlayback(t *testing.T) {
-	f := newFakeMPD()
-	f.queue = []string{"usb/a.flac", "cdda:///1", "cdda:///2"}
-	f.current = 1
-	client := f.start(t)
-
-	if err := client.StopDiscPlayback(); err != nil {
-		t.Fatal(err)
+func TestStopIfPlaying(t *testing.T) {
+	queue := []string{"usb/a.flac", "cdda:///1", "cdda:///2", "usb2/b.flac"}
+	tests := []struct {
+		name     string
+		prefix   string
+		current  int
+		wantStop bool
+	}{
+		{"disc playing", CDDAPathPrefix, 1, true},
+		{"other playing", CDDAPathPrefix, 0, false},
+		{"mount playing", "usb/", 0, true},
+		{"mount with a longer name playing", "usb/", 3, false},
 	}
-	assertQueue(t, f, "usb/a.flac")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMPD()
+			f.queue = append([]string(nil), queue...)
+			f.current = tt.current
+			client := f.start(t)
+
+			if err := client.StopIfPlaying(tt.prefix); err != nil {
+				t.Fatal(err)
+			}
+			stopped := false
+			for _, c := range f.sent() {
+				stopped = stopped || c == "stop"
+			}
+			if stopped != tt.wantStop {
+				t.Errorf("stop sent = %v, want %v", stopped, tt.wantStop)
+			}
+			// The queue is kept, unlike StopAndRemove
+			assertQueue(t, f, queue...)
+		})
+	}
 }
 
 func TestMount(t *testing.T) {
@@ -183,8 +219,33 @@ func TestUnmount(t *testing.T) {
 	if len(f.mounts) != 0 {
 		t.Errorf("mounts = %v, want none", f.mounts)
 	}
-	if err := client.Unmount("MYUSB"); err == nil {
-		t.Error("unmounting an unknown label should fail")
+	// Already unmounted, by an eject from the API before the device is removed
+	if err := client.Unmount("MYUSB"); err != nil {
+		t.Errorf("unmounting an unknown label = %v, want nil", err)
+	}
+	assertCommands(t, f, "listmounts", "unmount MYUSB", "listmounts")
+}
+
+func TestUSBMounts(t *testing.T) {
+	f := newFakeMPD()
+	f.mounts = []fakeMount{
+		{"", "/var/lib/mpd/music"},
+		{"MYUSB", "udisks://Kingston-by-uuid-AAAA"},
+		{"NAS", "nfs://nas/music"},
+		{"OTHER", "udisks://by-uuid-BBBB"},
+	}
+	client := f.start(t)
+
+	got, err := client.USBMounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Mount{
+		{Name: "MYUSB", Storage: "udisks://Kingston-by-uuid-AAAA"},
+		{Name: "OTHER", Storage: "udisks://by-uuid-BBBB"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("USBMounts() = %v, want %v", got, want)
 	}
 }
 
@@ -250,4 +311,17 @@ func TestContainsAny(t *testing.T) {
 			t.Errorf("containsAny(%q, %q) = %v, want %v", tt.s, tt.subs, got, tt.want)
 		}
 	}
+}
+
+func TestStop(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{"cdda:///1", "usb/a.flac"}
+	f.current = 1
+	client := f.start(t)
+
+	if err := client.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "stop")
+	assertQueue(t, f, "cdda:///1", "usb/a.flac")
 }

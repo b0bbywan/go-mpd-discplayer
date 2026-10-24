@@ -45,18 +45,16 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 	})
 }
 
-func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
-	return rc.StopPlayback(CDDAPathPrefix)
-}
-
-func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
+// StopAndRemove stops playback when the current song path starts with
+// prefix, then removes the songs under prefix from the queue.
+func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if checkPathPlaying(client, label) {
+		if checkPathPlaying(client, prefix) {
 			if err := client.Stop(); err != nil {
 				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
 			}
 		}
-		return deleteFromPlaylist(client, label)
+		return deleteFromPlaylist(client, prefix)
 	})
 }
 

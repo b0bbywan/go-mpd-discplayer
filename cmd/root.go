@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 const (
@@ -19,7 +21,7 @@ func (player *Player) ExecuteAction(device, action string) error {
 		}
 		return nil
 	case ActionStop:
-		if err := player.Client.StopDiscPlayback(); err != nil {
+		if err := player.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 			return fmt.Errorf("error adding tracks: %w", err)
 		}
 		return nil

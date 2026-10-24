@@ -39,6 +39,7 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"mount", "eject", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountEject, Mount: "MYUSB"}}},
 		{[]string{"stream", "play", "https://radio/live"}, options{action: cmd.Action{Name: cmd.ActionStreamPlay, URL: "https://radio/live"}}},
 		{[]string{"stop"}, options{action: cmd.Action{Name: cmd.ActionStop}}},
+		{[]string{"status"}, options{action: cmd.Action{Name: cmd.ActionStatus}}},
 	}
 	for _, tt := range tests {
 		got, out, err := parse(tt.args...)
@@ -96,6 +97,7 @@ func TestParseArgsErrors(t *testing.T) {
 		{[]string{"stream", "play"}, nil},
 		{[]string{"stream", "play", "a", "b"}, nil},
 		{[]string{"stop", "now"}, nil},
+		{[]string{"status", "now"}, nil},
 	}
 	for _, tt := range tests {
 		_, out, err := parse(tt.args...)
@@ -113,7 +115,7 @@ func TestUsage(t *testing.T) {
 	for _, want := range []string{
 		"disc play [--device <device>]", "disc stop", "disc eject [--device <device>]",
 		"mount list", "mount play <name>", "mount stop <name>", "mount eject <name>",
-		"stream play <url>", "stop ", "--version ", "(default: the drive holding a disc)", "-h, --help",
+		"stream play <url>", "stop ", "status ", "--version ", "(default: the drive holding a disc)", "-h, --help",
 		"--play ", "--stop ", "--eject ",
 	} {
 		if !strings.Contains(out, want) {
@@ -126,7 +128,7 @@ func TestActionFailures(t *testing.T) {
 	for _, action := range []string{
 		cmd.ActionDiscPlay, cmd.ActionDiscStop, cmd.ActionDiscEject,
 		cmd.ActionMountList, cmd.ActionMountPlay, cmd.ActionMountStop, cmd.ActionMountEject,
-		cmd.ActionStreamPlay, cmd.ActionStop,
+		cmd.ActionStreamPlay, cmd.ActionStop, cmd.ActionStatus,
 	} {
 		if actionFailures[action] == "" {
 			t.Errorf("no failure message for %s", action)

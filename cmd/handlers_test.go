@@ -21,9 +21,10 @@ var errFake = errors.New("fake error")
 // fakeClient records the MPD operations, as "name arg". Operations listed in
 // fail return errFake.
 type fakeClient struct {
-	calls  []string
-	fail   map[string]bool
-	mounts []mpdplayer.Mount
+	calls    []string
+	fail     map[string]bool
+	mounts   []mpdplayer.Mount
+	playback mpdplayer.Playback
 }
 
 func (c *fakeClient) record(name, arg string) error {
@@ -55,7 +56,7 @@ func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 }
 
 func (c *fakeClient) Status() (mpdplayer.Status, error) {
-	return mpdplayer.Status{Mounts: c.mounts}, c.record("Status", "")
+	return mpdplayer.Status{Playback: c.playback, Mounts: c.mounts}, c.record("Status", "")
 }
 
 type fakeMounter struct {
@@ -180,6 +181,7 @@ func TestPlayerActions(t *testing.T) {
 		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
 		{"ExecuteAction stream play", run(Action{Name: ActionStreamPlay, URL: "http://radio/stream"}), []string{"StartPlayback http://radio/stream"}, false},
 		{"ExecuteAction stop", run(Action{Name: ActionStop}), []string{"Stop"}, false},
+		{"ExecuteAction status", run(Action{Name: ActionStatus}), []string{"Status"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -213,5 +215,42 @@ func TestPrintMounts(t *testing.T) {
 	}
 	if want := "MYUSB\tudisks://a\nOTHER\tudisks://b\n"; out.String() != want {
 		t.Errorf("output = %q, want %q", out.String(), want)
+	}
+}
+
+func ptr(f float64) *float64 { return &f }
+
+func TestPrintStatus(t *testing.T) {
+	usb := []mpdplayer.Mount{{Name: "MUSIC", Storage: "udisks://a"}}
+	tests := []struct {
+		name     string
+		playback mpdplayer.Playback
+		mounts   []mpdplayer.Mount
+		want     string
+	}{
+		{"disc", mpdplayer.Playback{State: "play", Source: mpdplayer.SourceDisc,
+			Title: "Bruxelles", Artist: "Benabar", Album: "Reprise des negociations",
+			Position: 4, Length: 12, Elapsed: ptr(102.3), Duration: ptr(224)}, usb,
+			"state: play\nsource: disc\ntitle: Bruxelles\nartist: Benabar\nalbum: Reprise des negociations\n" +
+				"position: 4\nlength: 12\nelapsed: 102.3\nduration: 224\nmounts: MUSIC\tudisks://a\n"},
+		{"mount", mpdplayer.Playback{State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
+			Position: 1, Length: 1, Elapsed: ptr(0)}, usb,
+			"state: pause\nsource: mount\nmount: MUSIC\nposition: 1\nlength: 1\nelapsed: 0\nmounts: MUSIC\tudisks://a\n"},
+		{"stream", mpdplayer.Playback{State: "play", Source: mpdplayer.SourceStream, URL: "https://radio/live",
+			Title: "Live", Name: "Radio", Position: 1, Length: 1, Elapsed: ptr(12)}, nil,
+			"state: play\nsource: stream\ntitle: Live\nname: Radio\nurl: https://radio/live\nposition: 1\nlength: 1\nelapsed: 12\n"},
+		{"stopped", mpdplayer.Playback{State: "stop"}, nil, "state: stop\nlength: 0\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeClient{playback: tt.playback, mounts: tt.mounts}
+			var out strings.Builder
+			if err := newTestPlayer(client, &fakeMounter{}).ExecuteAction(&out, Action{Name: ActionStatus}); err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != tt.want {
+				t.Errorf("output =\n%s\nwant\n%s", out.String(), tt.want)
+			}
+		})
 	}
 }

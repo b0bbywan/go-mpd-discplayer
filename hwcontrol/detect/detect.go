@@ -6,6 +6,8 @@ import (
 	"log"
 
 	"github.com/jochenvg/go-udev"
+
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/blockdev"
 )
 
 // UdevDetector écoute les events udev et publie des DeviceEvent
@@ -32,7 +34,7 @@ func (d *UdevDetector) Run(ctx context.Context, out chan<- DeviceEvent) error {
 	log.Println("Listening for udev events...")
 
 	// Monitor is already listening, so nothing plugged in from now on is missed.
-	d.coldplug(ctx, &u, out)
+	d.coldplug(ctx, out)
 
 	for {
 		select {
@@ -54,19 +56,10 @@ func (d *UdevDetector) Run(ctx context.Context, out chan<- DeviceEvent) error {
 
 // coldplug emits a DevicePresent event for USB devices already plugged in.
 // Discs are skipped so a CD left in the drive does not autoplay at boot.
-func (d *UdevDetector) coldplug(ctx context.Context, u *udev.Udev, out chan<- DeviceEvent) {
-	e := u.NewEnumerate()
-	if err := e.AddMatchSubsystem("block"); err != nil {
-		log.Printf("coldplug: failed to add filter: %v", err)
-		return
-	}
-	if err := e.AddMatchIsInitialized(); err != nil {
-		log.Printf("coldplug: failed to add filter: %v", err)
-		return
-	}
-	devices, err := e.Devices()
+func (d *UdevDetector) coldplug(ctx context.Context, out chan<- DeviceEvent) {
+	devices, err := blockdev.List()
 	if err != nil {
-		log.Printf("coldplug: failed to enumerate devices: %v", err)
+		log.Printf("coldplug: %v", err)
 		return
 	}
 	for _, dev := range devices {

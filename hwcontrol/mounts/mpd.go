@@ -8,6 +8,7 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
+	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/blockdev"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
@@ -69,14 +70,9 @@ func (m *mpdFinder) mountWithRetry(identifiers []string, label string) error {
 
 // presentIdentifiers returns the identifiers of all block devices currently known to udev.
 func presentIdentifiers() ([]string, error) {
-	u := udev.Udev{}
-	e := u.NewEnumerate()
-	if err := e.AddMatchSubsystem("block"); err != nil {
-		return nil, fmt.Errorf("failed to add filter: %w", err)
-	}
-	devices, err := e.Devices()
+	devices, err := blockdev.List()
 	if err != nil {
-		return nil, fmt.Errorf("failed to enumerate block devices: %w", err)
+		return nil, err
 	}
 	var ids []string
 	for _, dev := range devices {

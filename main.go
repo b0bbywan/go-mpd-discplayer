@@ -36,9 +36,9 @@ func main() {
 	}
 	defer player.Close()
 
-	if opts.action != "" {
-		if err := player.ExecuteAction(opts.device, opts.action); err != nil {
-			log.Fatalf("%s: %v", actionFailures[opts.action], err)
+	if opts.action.Name != "" {
+		if err := player.ExecuteAction(opts.action); err != nil {
+			log.Fatalf("%s: %v", actionFailures[opts.action.Name], err)
 		}
 		return
 	}

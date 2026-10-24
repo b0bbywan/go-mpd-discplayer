@@ -137,7 +137,7 @@ func TestCloseWithoutServices(t *testing.T) {
 }
 
 func TestExecuteActionUnknown(t *testing.T) {
-	if err := (&Player{}).ExecuteAction("/dev/sr0", "rewind"); err == nil {
+	if err := (&Player{}).ExecuteAction(Action{Name: "rewind"}); err == nil {
 		t.Error("an unknown action should fail")
 	}
 }

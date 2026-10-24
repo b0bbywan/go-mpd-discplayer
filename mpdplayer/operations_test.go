@@ -96,6 +96,42 @@ func TestStopAndRemove(t *testing.T) {
 	}
 }
 
+func TestStopIfPlaying(t *testing.T) {
+	queue := []string{"usb/a.flac", "cdda:///1", "cdda:///2", "usb2/b.flac"}
+	tests := []struct {
+		name     string
+		prefix   string
+		current  int
+		wantStop bool
+	}{
+		{"disc playing", CDDAPathPrefix, 1, true},
+		{"other playing", CDDAPathPrefix, 0, false},
+		{"mount playing", "usb/", 0, true},
+		{"mount with a longer name playing", "usb/", 3, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMPD()
+			f.queue = append([]string(nil), queue...)
+			f.current = tt.current
+			client := f.start(t)
+
+			if err := client.StopIfPlaying(tt.prefix); err != nil {
+				t.Fatal(err)
+			}
+			stopped := false
+			for _, c := range f.sent() {
+				stopped = stopped || c == "stop"
+			}
+			if stopped != tt.wantStop {
+				t.Errorf("stop sent = %v, want %v", stopped, tt.wantStop)
+			}
+			// The queue is kept, unlike StopAndRemove
+			assertQueue(t, f, queue...)
+		})
+	}
+}
+
 func TestMount(t *testing.T) {
 	const neighbor = "udisks://Kingston-1234-by-uuid-AAAA-BBBB"
 	tests := []struct {

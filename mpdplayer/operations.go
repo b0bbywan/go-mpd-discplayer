@@ -58,14 +58,20 @@ func (rc *ReconnectingMPDClient) Stop() error {
 	})
 }
 
+// StopIfPlaying stops playback when the current song path starts with
+// prefix. The queue is left untouched.
+func (rc *ReconnectingMPDClient) StopIfPlaying(prefix string) error {
+	return rc.execute(func(client *mpd.Client) error {
+		return stopIfPlaying(client, prefix)
+	})
+}
+
 // StopAndRemove stops playback when the current song path starts with
 // prefix, then removes the songs under prefix from the queue.
 func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if checkPathPlaying(client, prefix) {
-			if err := client.Stop(); err != nil {
-				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-			}
+		if err := stopIfPlaying(client, prefix); err != nil {
+			return err
 		}
 		return deleteFromPlaylist(client, prefix)
 	})
@@ -209,6 +215,16 @@ func addTracks(client *mpd.Client, trackCount int) error {
 		}
 	}
 	log.Printf("info: Added %d tracks to the playlist", trackCount)
+	return nil
+}
+
+func stopIfPlaying(client *mpd.Client, label string) error {
+	if !checkPathPlaying(client, label) {
+		return nil
+	}
+	if err := client.Stop(); err != nil {
+		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+	}
 	return nil
 }
 

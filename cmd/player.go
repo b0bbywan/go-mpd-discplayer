@@ -34,6 +34,7 @@ type playerClient interface {
 	StartUSBPlayback(label string) error
 	StartPlayback(uri string) error
 	Stop() error
+	StopIfPlaying(prefix string) error
 	StopAndRemove(prefix string) error
 	UpdateDB(uri string) error
 	Disconnect()
@@ -248,6 +249,14 @@ func (p *Player) PlayDisc(drive string) error {
 func (p *Player) Stop() error {
 	if err := p.Client.Stop(); err != nil {
 		return fmt.Errorf("error stopping playback: %w", err)
+	}
+	return nil
+}
+
+// StopDisc stops playback when a disc track is playing. The queue is left untouched.
+func (p *Player) StopDisc() error {
+	if err := p.Client.StopIfPlaying(mpdplayer.CDDAPathPrefix); err != nil {
+		return fmt.Errorf("error stopping disc playback: %w", err)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/b0bbywan/go-mpd-discplayer/cmd"
@@ -22,6 +23,10 @@ var actionFailures = map[string]string{
 	cmd.ActionDiscPlay:   "Failed to start disc playback",
 	cmd.ActionDiscStop:   "Failed to stop disc playback",
 	cmd.ActionDiscEject:  "Failed to eject disc",
+	cmd.ActionMountList:  "Failed to list mounts",
+	cmd.ActionMountPlay:  "Failed to start USB playback",
+	cmd.ActionMountStop:  "Failed to stop USB playback",
+	cmd.ActionMountEject: "Failed to unmount USB storage",
 	cmd.ActionStreamPlay: "Failed to play stream",
 	cmd.ActionStop:       "Failed to stop playback",
 }
@@ -83,11 +88,15 @@ func parseArgs(fs *flag.FlagSet, args []string) (options, error) {
 }
 
 // parseCommand parses a command and its arguments: disc play|stop|eject,
-// stream play <url> or stop.
+// mount list|play|stop|eject, stream play <url> or stop.
 func parseCommand(fs *flag.FlagSet, args []string, device string) (cmd.Action, error) {
 	switch {
 	case args[0] == "stop" && len(args) == 1:
 		return cmd.Action{Name: cmd.ActionStop}, nil
+	case args[0] == "mount" && len(args) == 2 && args[1] == "list":
+		return cmd.Action{Name: cmd.ActionMountList}, nil
+	case args[0] == "mount" && len(args) == 3 && slices.Contains([]string{"play", "stop", "eject"}, args[1]):
+		return cmd.Action{Name: "mount " + args[1], Mount: args[2]}, nil
 	case args[0] == "stream" && len(args) == 3 && args[1] == "play":
 		return cmd.Action{Name: cmd.ActionStreamPlay, URL: args[2]}, nil
 	case args[0] == "disc" && len(args) >= 2:
@@ -136,6 +145,10 @@ Commands:
   disc play [--device <device>]    Play the disc
   disc stop                        Stop playback if the disc is playing, the queue is left untouched
   disc eject [--device <device>]   Stop disc playback and eject the disc
+  mount list                       List the USB storages mounted in MPD: name, then storage
+  mount play <name>                Play a USB storage
+  mount stop <name>                Stop playback if the USB storage is playing, the queue is left untouched
+  mount eject <name>               Stop the USB storage playback and unmount it from MPD
   stream play <url>                Play a URL, a webradio for instance
   stop                             Stop playback, whatever is playing
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jochenvg/go-udev"
@@ -145,7 +147,7 @@ func TestDeviceHandlers(t *testing.T) {
 func TestPlayerActions(t *testing.T) {
 	notADrive := filepath.Join(t.TempDir(), "sr0")
 	run := func(a Action) func(p *Player) error {
-		return func(p *Player) error { return p.ExecuteAction(a) }
+		return func(p *Player) error { return p.ExecuteAction(io.Discard, a) }
 	}
 	tests := []struct {
 		name    string
@@ -168,6 +170,10 @@ func TestPlayerActions(t *testing.T) {
 		{"ExecuteAction disc play", run(Action{Name: ActionDiscPlay, Device: "/dev/sr1"}), []string{"StartDiscPlayback /dev/sr1"}, false},
 		{"ExecuteAction disc stop", run(Action{Name: ActionDiscStop}), []string{"StopIfPlaying cdda://"}, false},
 		{"ExecuteAction disc eject", run(Action{Name: ActionDiscEject, Device: notADrive}), []string{"StopAndRemove cdda://"}, true},
+		{"ExecuteAction mount list", run(Action{Name: ActionMountList}), []string{"USBMounts"}, false},
+		{"ExecuteAction mount play", run(Action{Name: ActionMountPlay, Mount: "MYUSB"}), []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
+		{"ExecuteAction mount stop", run(Action{Name: ActionMountStop, Mount: "MYUSB"}), []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
+		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
 		{"ExecuteAction stream play", run(Action{Name: ActionStreamPlay, URL: "http://radio/stream"}), []string{"StartPlayback http://radio/stream"}, false},
 		{"ExecuteAction stop", run(Action{Name: ActionStop}), []string{"Stop"}, false},
 	}
@@ -189,5 +195,19 @@ func TestUnknownMountError(t *testing.T) {
 	p := newTestPlayer(&fakeClient{}, &fakeMounter{})
 	if err := p.StopMount("MYUSB"); !errors.Is(err, mpdplayer.ErrUnknownMount) {
 		t.Errorf("StopMount() = %v, want ErrUnknownMount", err)
+	}
+}
+
+func TestPrintMounts(t *testing.T) {
+	client := &fakeClient{mounts: []mpdplayer.Mount{
+		{Name: "MYUSB", Storage: "udisks://a"},
+		{Name: "OTHER", Storage: "udisks://b"},
+	}}
+	var out strings.Builder
+	if err := newTestPlayer(client, &fakeMounter{}).ExecuteAction(&out, Action{Name: ActionMountList}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "MYUSB\tudisks://a\nOTHER\tudisks://b\n"; out.String() != want {
+		t.Errorf("output = %q, want %q", out.String(), want)
 	}
 }

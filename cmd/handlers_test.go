@@ -40,6 +40,7 @@ func (c *fakeClient) StartDiscPlayback(device string) error {
 func (c *fakeClient) StartUSBPlayback(label string) error { return c.record("StartUSBPlayback", label) }
 func (c *fakeClient) StartPlayback(uri string) error      { return c.record("StartPlayback", uri) }
 func (c *fakeClient) Stop() error                         { return c.record("Stop", "") }
+func (c *fakeClient) StopIfPlaying(prefix string) error   { return c.record("StopIfPlaying", prefix) }
 func (c *fakeClient) StopAndRemove(prefix string) error   { return c.record("StopAndRemove", prefix) }
 func (c *fakeClient) UpdateDB(uri string) error           { return c.record("UpdateDB", uri) }
 func (c *fakeClient) Disconnect()                         { _ = c.record("Disconnect", "") }
@@ -144,6 +145,7 @@ func TestPlayerActions(t *testing.T) {
 	}{
 		{"PlayDisc", func(p *Player) error { return p.PlayDisc("/dev/sr1") }, []string{"StartDiscPlayback /dev/sr1"}, false},
 		{"Stop", func(p *Player) error { return p.Stop() }, []string{"Stop"}, false},
+		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda://"}, false},
 		// Playback is stopped before ejecting, even when the eject fails
 		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda://"}, true},
 		{"ExecuteAction play", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionPlay) }, []string{"StartDiscPlayback /dev/sr1"}, false},

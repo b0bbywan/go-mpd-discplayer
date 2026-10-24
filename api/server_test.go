@@ -30,6 +30,11 @@ func (f *fakePlayer) Stop() error {
 	return f.err
 }
 
+func (f *fakePlayer) StopDisc() error {
+	f.calls = append(f.calls, "stop_disc")
+	return f.err
+}
+
 func (f *fakePlayer) EjectDisc(drive string) error {
 	f.calls = append(f.calls, "eject")
 	return f.err
@@ -53,6 +58,7 @@ func TestPlayerRoutes(t *testing.T) {
 	}{
 		{"/player/stop", "stop"},
 		{"/player/disc/play", "play"},
+		{"/player/disc/stop", "stop_disc"},
 		{"/player/disc/eject", "eject"},
 	}
 	for _, tt := range tests {

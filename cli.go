@@ -10,8 +10,6 @@ import (
 	"github.com/b0bbywan/go-mpd-discplayer/cmd"
 )
 
-const defaultDevice = "/dev/sr0"
-
 // options are the command-line options. An empty action runs the daemon.
 type options struct {
 	action  cmd.Action
@@ -50,7 +48,7 @@ func parseArgs(fs *flag.FlagSet, args []string) (options, error) {
 	for name, action := range legacyActions {
 		legacy[name] = fs.Bool(name, false, fmt.Sprintf("Deprecated, same as %q", action))
 	}
-	device := fs.String("device", defaultDevice, "Disc device used by disc play and disc eject")
+	device := fs.String("device", "", "Disc device used by disc play and disc eject")
 	fs.BoolVar(&opts.version, "version", false, "Print version and exit")
 	fs.Usage = func() { usage(fs) }
 
@@ -153,7 +151,7 @@ Commands:
   stop                             Stop playback, whatever is playing
 
 Options:
-  --device <device>   Disc device used by disc play and disc eject (default: %[2]s)
+  --device <device>   Disc device used by disc play and disc eject (default: the drive holding a disc)
   --version           Print version and exit
   -h, --help          Display this help message
 
@@ -161,5 +159,5 @@ Deprecated options:
   --play    Same as "disc play"
   --stop    Same as "stop"
   --eject   Same as "disc eject"
-`, cmd.AppName, defaultDevice)
+`, cmd.AppName)
 }

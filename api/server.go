@@ -29,6 +29,8 @@ type Player interface {
 
 	PlayURL(url string) error // play a stream
 	Stop() error              // stop playback, whatever is playing
+
+	Status() (mpdplayer.Status, error) // playback state and USB storages mounted in MPD
 }
 
 type Config struct {

@@ -54,6 +54,10 @@ func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 	return c.mounts, c.record("USBMounts", "")
 }
 
+func (c *fakeClient) Status() (mpdplayer.Status, error) {
+	return mpdplayer.Status{Mounts: c.mounts}, c.record("Status", "")
+}
+
 type fakeMounter struct {
 	relPath string
 	err     error

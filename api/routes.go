@@ -13,7 +13,32 @@ type mountResponse struct {
 	Storage string `json:"storage"`
 }
 
+type statusResponse struct {
+	Playback playbackResponse `json:"playback"`
+	Mounts   []mountResponse  `json:"mounts"`
+}
+
+// playbackResponse is the playback state, null standing for what is missing.
+type playbackResponse struct {
+	State    string   `json:"state"`
+	Source   *string  `json:"source"`
+	Mount    *string  `json:"mount"`
+	Title    *string  `json:"title"`
+	Artist   *string  `json:"artist"`
+	Album    *string  `json:"album"`
+	Name     *string  `json:"name"`
+	URL      *string  `json:"url"`
+	Position *int     `json:"position"`
+	Length   int      `json:"length"`
+	Elapsed  *float64 `json:"elapsed"`
+	Duration *float64 `json:"duration"`
+}
+
 func (s *Server) registerPlayerRoutes(p Player) {
+	s.mux.HandleFunc(
+		"GET /player/status",
+		withJSON(p.Status, newStatusResponse),
+	)
 	s.mux.HandleFunc(
 		"POST /player/stop",
 		withAction(p.Stop),
@@ -121,4 +146,32 @@ func withMount(fn func(name string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		handleActionError(w, fn(r.PathValue("name")))
 	}
+}
+
+func newStatusResponse(st mpdplayer.Status) statusResponse {
+	pb := st.Playback
+	res := playbackResponse{
+		State:    pb.State,
+		Source:   nonZero(pb.Source),
+		Mount:    nonZero(pb.Mount),
+		Title:    nonZero(pb.Title),
+		Artist:   nonZero(pb.Artist),
+		Album:    nonZero(pb.Album),
+		Name:     nonZero(pb.Name),
+		URL:      nonZero(pb.URL),
+		Position: nonZero(pb.Position),
+		Length:   pb.Length,
+		Elapsed:  pb.Elapsed,
+		Duration: pb.Duration,
+	}
+	return statusResponse{Playback: res, Mounts: newMountsResponse(st.Mounts)}
+}
+
+// nonZero points to v, nil when v is the zero value.
+func nonZero[T comparable](v T) *T {
+	var zero T
+	if v == zero {
+		return nil
+	}
+	return &v
 }

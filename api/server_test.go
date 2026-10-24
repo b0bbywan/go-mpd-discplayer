@@ -21,6 +21,12 @@ type fakePlayer struct {
 	calls  []string
 	err    error
 	mounts []mpdplayer.Mount
+	status mpdplayer.Status
+}
+
+func (f *fakePlayer) Status() (mpdplayer.Status, error) {
+	f.calls = append(f.calls, "status")
+	return f.status, f.err
 }
 
 func (f *fakePlayer) Mounts() ([]mpdplayer.Mount, error) {
@@ -225,6 +231,70 @@ func TestMountsError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if rec := serve(t, &fakePlayer{err: tt.err}, http.MethodGet, "/player/mounts", nil); rec.Code != tt.want {
+			t.Errorf("%v: status = %d, want %d", tt.err, rec.Code, tt.want)
+		}
+	}
+}
+
+func ptr(f float64) *float64 { return &f }
+
+func TestStatus(t *testing.T) {
+	usb := []mpdplayer.Mount{{Name: "MUSIC", Storage: "udisks://by-uuid-3A4F-1C2B"}}
+	tests := []struct {
+		name   string
+		status mpdplayer.Status
+		want   string
+	}{
+		{"disc", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
+			State: "play", Source: mpdplayer.SourceDisc,
+			Title: "Bruxelles", Artist: "Benabar", Album: "Reprise des negociations",
+			Position: 4, Length: 12, Elapsed: ptr(102.3), Duration: ptr(224),
+		}}, `{"playback":{"state":"play","source":"disc","mount":null,"title":"Bruxelles","artist":"Benabar",` +
+			`"album":"Reprise des negociations","name":null,"url":null,"position":4,"length":12,"elapsed":102.3,"duration":224},` +
+			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
+		{"mount", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
+			State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
+			Position: 1, Length: 1, Elapsed: ptr(0), Duration: ptr(60),
+		}}, `{"playback":{"state":"pause","source":"mount","mount":"MUSIC","title":null,"artist":null,` +
+			`"album":null,"name":null,"url":null,"position":1,"length":1,"elapsed":0,"duration":60},` +
+			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
+		{"stream", mpdplayer.Status{Playback: mpdplayer.Playback{
+			State: "play", Source: mpdplayer.SourceStream, URL: "https://radio.example/live",
+			Title: "Live", Name: "Radio", Position: 1, Length: 1, Elapsed: ptr(12),
+		}}, `{"playback":{"state":"play","source":"stream","mount":null,"title":"Live","artist":null,` +
+			`"album":null,"name":"Radio","url":"https://radio.example/live","position":1,"length":1,"elapsed":12,"duration":null},` +
+			`"mounts":[]}`},
+		{"stopped", mpdplayer.Status{Playback: mpdplayer.Playback{State: "stop"}},
+			`{"playback":{"state":"stop","source":null,"mount":null,"title":null,"artist":null,` +
+				`"album":null,"name":null,"url":null,"position":null,"length":0,"elapsed":null,"duration":null},` +
+				`"mounts":[]}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(t, &fakePlayer{status: tt.status}, http.MethodGet, "/player/status", nil)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			if got := rec.Header().Get("Content-Type"); got != "application/json" {
+				t.Errorf("Content-Type = %q", got)
+			}
+			if got := rec.Body.String(); got != tt.want+"\n" {
+				t.Errorf("body = %s\nwant   %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStatusError(t *testing.T) {
+	tests := []struct {
+		err  error
+		want int
+	}{
+		{fmt.Errorf("error reading status: %w", mpdplayer.ErrMPD), http.StatusBadGateway},
+		{errors.New("other failure"), http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		if rec := serve(t, &fakePlayer{err: tt.err}, http.MethodGet, "/player/status", nil); rec.Code != tt.want {
 			t.Errorf("%v: status = %d, want %d", tt.err, rec.Code, tt.want)
 		}
 	}

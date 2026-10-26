@@ -10,21 +10,15 @@ const (
 	ActionEject = "eject"
 )
 
-// executeAction handles the main logic for each action (add or remove).
+// ExecuteAction runs a CLI action. device is the drive used by play and eject.
 func (player *Player) ExecuteAction(device, action string) error {
 	switch action {
 	case ActionPlay:
-		if err := player.Client.StartDiscPlayback(device); err != nil {
-			return fmt.Errorf("error adding tracks: %w", err)
-		}
-		return nil
+		return player.PlayDisc(device)
 	case ActionStop:
-		if err := player.Client.StopDiscPlayback(); err != nil {
-			return fmt.Errorf("error adding tracks: %w", err)
-		}
-		return nil
+		return player.Stop()
 	case ActionEject:
-		return player.Eject(device)
+		return player.EjectDisc(device)
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}

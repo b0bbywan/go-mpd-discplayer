@@ -5,8 +5,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/jochenvg/go-udev"
 )
 
 func TestValidFsType(t *testing.T) {
@@ -39,8 +37,7 @@ func skipWithoutSysfs(t *testing.T) {
 func TestColdplugOnlyEmitsUSB(t *testing.T) {
 	skipWithoutSysfs(t)
 	out := make(chan DeviceEvent, 64)
-	u := udev.Udev{}
-	(&UdevDetector{}).coldplug(context.Background(), &u, out)
+	(&UdevDetector{}).coldplug(context.Background(), out)
 	close(out)
 	for ev := range out {
 		if ev.Type != DevicePresent || ev.Device.Kind() != DeviceUSB {
@@ -55,9 +52,8 @@ func TestColdplugStopsOnCancel(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		u := udev.Udev{}
 		// Unbuffered and never read: only the cancelled context can unblock it
-		(&UdevDetector{}).coldplug(ctx, &u, make(chan DeviceEvent))
+		(&UdevDetector{}).coldplug(ctx, make(chan DeviceEvent))
 		close(done)
 	}()
 	select {

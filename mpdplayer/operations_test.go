@@ -47,20 +47,32 @@ func TestStartUSBPlayback(t *testing.T) {
 	assertCommands(t, f, "clear", "update MYUSB", "status", "add MYUSB", "play")
 }
 
-func TestStopPlayback(t *testing.T) {
+func TestStartUSBPlaybackWaitsForUpdate(t *testing.T) {
+	f := newFakeMPD()
+	f.updating = 2
+	client := f.start(t)
+
+	if err := client.StartUSBPlayback("MYUSB"); err != nil {
+		t.Fatal(err)
+	}
+	// The files are added once the update is over
+	assertCommands(t, f, "clear", "update MYUSB", "status", "status", "status", "add MYUSB", "play")
+}
+
+func TestStopAndRemove(t *testing.T) {
 	queue := []string{"cdda:///1", "usb/a.flac", "cdda:///2", "cdda:///3", "usb/b.flac", "cdda:///4"}
 	tests := []struct {
 		name      string
-		label     string
+		prefix    string
 		current   int
 		wantStop  bool
 		wantQueue []string
 	}{
-		{"label playing", CDDAPathPrefix, 2, true, []string{"usb/a.flac", "usb/b.flac"}},
+		{"prefix playing", CDDAPathPrefix, 2, true, []string{"usb/a.flac", "usb/b.flac"}},
 		{"other playing", CDDAPathPrefix, 1, false, []string{"usb/a.flac", "usb/b.flac"}},
 		{"nothing playing", CDDAPathPrefix, -1, true, []string{"usb/a.flac", "usb/b.flac"}},
-		{"usb label", "usb", 0, false, []string{"cdda:///1", "cdda:///2", "cdda:///3", "cdda:///4"}},
-		{"label absent", "nas", 0, false, queue},
+		{"usb prefix", "usb", 0, false, []string{"cdda:///1", "cdda:///2", "cdda:///3", "cdda:///4"}},
+		{"prefix absent", "nas", 0, false, queue},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,7 +81,7 @@ func TestStopPlayback(t *testing.T) {
 			f.current = tt.current
 			client := f.start(t)
 
-			if err := client.StopPlayback(tt.label); err != nil {
+			if err := client.StopAndRemove(tt.prefix); err != nil {
 				t.Fatal(err)
 			}
 			stopped := false
@@ -82,18 +94,6 @@ func TestStopPlayback(t *testing.T) {
 			assertQueue(t, f, tt.wantQueue...)
 		})
 	}
-}
-
-func TestStopDiscPlayback(t *testing.T) {
-	f := newFakeMPD()
-	f.queue = []string{"usb/a.flac", "cdda:///1", "cdda:///2"}
-	f.current = 1
-	client := f.start(t)
-
-	if err := client.StopDiscPlayback(); err != nil {
-		t.Fatal(err)
-	}
-	assertQueue(t, f, "usb/a.flac")
 }
 
 func TestMount(t *testing.T) {
@@ -250,4 +250,17 @@ func TestContainsAny(t *testing.T) {
 			t.Errorf("containsAny(%q, %q) = %v, want %v", tt.s, tt.subs, got, tt.want)
 		}
 	}
+}
+
+func TestStop(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{"cdda:///1", "usb/a.flac"}
+	f.current = 1
+	client := f.start(t)
+
+	if err := client.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "stop")
+	assertQueue(t, f, "cdda:///1", "usb/a.flac")
 }

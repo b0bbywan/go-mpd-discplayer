@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jochenvg/go-udev"
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
@@ -27,14 +28,31 @@ const (
 
 var AppVersion = "dev"
 
+// playerClient is the part of the MPD client the player drives.
+type playerClient interface {
+	StartDiscPlayback(device string) error
+	StartUSBPlayback(label string) error
+	StartPlayback(uri string) error
+	Stop() error
+	StopAndRemove(prefix string) error
+	UpdateDB(uri string) error
+	Disconnect()
+}
+
+// deviceMounter exposes USB devices to MPD.
+type deviceMounter interface {
+	Mount(device *udev.Device) (string, error)
+	Unmount(device *udev.Device) (string, error)
+}
+
 type Player struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        *sync.WaitGroup
 	discSpeed int
-	Client    *mpdplayer.ReconnectingMPDClient
+	Client    playerClient
 	Notifier  *notifications.Notifier
-	Mounter   *mounts.MountManager
+	Mounter   deviceMounter
 	scheduler *scheduler
 	handlers  []Handler
 }
@@ -208,14 +226,47 @@ func (p *Player) Close() {
 	p.wg.Wait()
 }
 
-// Eject stops disc playback and ejects the disc.
-func (p *Player) Eject(device string) error {
+// PlayDisc replaces the queue with the disc in drive and starts playback.
+// An empty drive stands for the drive holding an audio disc.
+func (p *Player) PlayDisc(drive string) error {
+	if drive == "" {
+		var err error
+		if drive, err = detect.FindAudioDisc(); err != nil {
+			return err
+		}
+	}
+	if err := hwcontrol.SetDiscSpeed(drive, p.discSpeed); err != nil {
+		log.Printf("warning: failed to set disc speed on %s: %v", drive, err)
+	}
+	if err := p.Client.StartDiscPlayback(drive); err != nil {
+		return fmt.Errorf("error adding tracks: %w", err)
+	}
+	return nil
+}
+
+// Stop stops playback, whatever is playing. The queue is left untouched.
+func (p *Player) Stop() error {
+	if err := p.Client.Stop(); err != nil {
+		return fmt.Errorf("error stopping playback: %w", err)
+	}
+	return nil
+}
+
+// EjectDisc stops disc playback and ejects the disc in drive. An empty
+// drive stands for the drive holding a disc.
+func (p *Player) EjectDisc(drive string) error {
+	if drive == "" {
+		var err error
+		if drive, err = detect.FindDisc(); err != nil {
+			return err
+		}
+	}
 	// Stop first so MPD is not left reading a disc that is going away
-	if err := p.Client.StopDiscPlayback(); err != nil {
+	if err := p.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)
 	}
-	if err := hwcontrol.EjectDisc(device); err != nil {
-		return fmt.Errorf("error ejecting %s: %w", device, err)
+	if err := hwcontrol.EjectDisc(drive); err != nil {
+		return fmt.Errorf("error ejecting %s: %w", drive, err)
 	}
 	return nil
 }

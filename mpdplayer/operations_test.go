@@ -219,8 +219,33 @@ func TestUnmount(t *testing.T) {
 	if len(f.mounts) != 0 {
 		t.Errorf("mounts = %v, want none", f.mounts)
 	}
-	if err := client.Unmount("MYUSB"); err == nil {
-		t.Error("unmounting an unknown label should fail")
+	// Already unmounted, by an eject from the API before the device is removed
+	if err := client.Unmount("MYUSB"); err != nil {
+		t.Errorf("unmounting an unknown label = %v, want nil", err)
+	}
+	assertCommands(t, f, "listmounts", "unmount MYUSB", "listmounts")
+}
+
+func TestUSBMounts(t *testing.T) {
+	f := newFakeMPD()
+	f.mounts = []fakeMount{
+		{"", "/var/lib/mpd/music"},
+		{"MYUSB", "udisks://Kingston-by-uuid-AAAA"},
+		{"NAS", "nfs://nas/music"},
+		{"OTHER", "udisks://by-uuid-BBBB"},
+	}
+	client := f.start(t)
+
+	got, err := client.USBMounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Mount{
+		{Name: "MYUSB", Storage: "udisks://Kingston-by-uuid-AAAA"},
+		{Name: "OTHER", Storage: "udisks://by-uuid-BBBB"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("USBMounts() = %v, want %v", got, want)
 	}
 }
 

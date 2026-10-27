@@ -184,6 +184,8 @@ func (p *Player) Start() {
 
 	p.newDiscHandler()
 	p.newUSBHandler()
+	// MPD may have kept mounts from a previous run
+	p.refreshMounts()
 
 	detector := detect.NewUdevDetector()
 	events := make(chan detect.DeviceEvent)
@@ -295,8 +297,28 @@ func (p *Player) StopDisc() error {
 	return nil
 }
 
-// Mounts lists the USB storages mounted in MPD. The list is empty with the
-// symlink mount method, where MPD mounts nothing.
+// State returns what the player knows about its media. It is filled only
+// once the player is started; the CLI reads MPD instead.
+func (p *Player) State() state.State {
+	return p.store.Load()
+}
+
+// refreshMounts copies the USB storages mounted in MPD into the state. On
+// error the state keeps the previous list.
+func (p *Player) refreshMounts() {
+	mounts, err := p.Client.USBMounts()
+	if err != nil {
+		log.Printf("warning: failed to refresh the mounts: %v", err)
+		return
+	}
+	p.store.Update(func(st state.State) state.State {
+		st.Mounts = mounts
+		return st
+	})
+}
+
+// Mounts lists the USB storages mounted in MPD, asking MPD. The list is empty
+// with the symlink mount method, where MPD mounts nothing.
 func (p *Player) Mounts() ([]mpdplayer.Mount, error) {
 	mounts, err := p.Client.USBMounts()
 	if err != nil {
@@ -348,7 +370,9 @@ func (p *Player) EjectMount(name string) error {
 	if err := p.Client.StopAndRemove(mpdplayer.MountPrefix(name)); err != nil {
 		log.Printf("warning: failed to stop %s playback before unmount: %v", name, err)
 	}
-	if err := p.Client.Unmount(name); err != nil {
+	err := p.Client.Unmount(name)
+	p.refreshMounts()
+	if err != nil {
 		return fmt.Errorf("error unmounting %s: %w", name, err)
 	}
 	return nil

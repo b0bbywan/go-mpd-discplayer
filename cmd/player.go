@@ -55,8 +55,10 @@ type cueResolver interface {
 	// Cached reads the metadata of the cached sheet of the disc id, without
 	// reading the drive.
 	Cached(id string) (*types.DiscInfo, error)
-	// CuePath is the path of the cached sheet of the disc id.
+	// CuePath and CoverPath are the paths of the cached sheet and cover of
+	// the disc id.
 	CuePath(id string) string
+	CoverPath(id string) string
 }
 
 // deviceMounter exposes USB devices to MPD.

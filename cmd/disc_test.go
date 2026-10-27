@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -137,6 +138,30 @@ func TestRemoveDisc(t *testing.T) {
 	}
 	assertDisc(t, p, nil)
 	assertDiscFile(t, p, nil)
+}
+
+func TestDiscCover(t *testing.T) {
+	dir := t.TempDir()
+	cover := filepath.Join(dir, "9c0bf40c", "cover.jpg")
+	if err := os.MkdirAll(filepath.Dir(cover), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cover, []byte("jpeg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := newDiscTestPlayer(t, &fakeClient{}, &fakeCuer{cacheDir: dir})
+
+	got, err := p.DiscCover("9c0bf40c")
+	if err != nil || got != cover {
+		t.Errorf("DiscCover() = %q, %v, want %q", got, err, cover)
+	}
+	if _, err := p.DiscCover("00000000"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("DiscCover() of a disc without cover error = %v, want fs.ErrNotExist", err)
+	}
+	p.Cuer = nil
+	if _, err := p.DiscCover("9c0bf40c"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("DiscCover() without cue cache error = %v, want fs.ErrNotExist", err)
+	}
 }
 
 func TestPresentDisc(t *testing.T) {

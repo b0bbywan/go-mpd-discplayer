@@ -12,6 +12,8 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
+	"github.com/b0bbywan/go-disc-cuer/cue"
+
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
@@ -39,8 +41,8 @@ func (c *fakeClient) record(name, arg string) error {
 	return nil
 }
 
-func (c *fakeClient) StartDiscPlayback(device string) error {
-	return c.record("StartDiscPlayback", device)
+func (c *fakeClient) StartDiscPlayback(device, cuePath string) error {
+	return c.record("StartDiscPlayback", strings.TrimSpace(device+" "+cuePath))
 }
 func (c *fakeClient) StartUSBPlayback(label string) error { return c.record("StartUSBPlayback", label) }
 func (c *fakeClient) StartPlayback(uri string) error      { return c.record("StartPlayback", uri) }
@@ -62,6 +64,16 @@ func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 
 func (c *fakeClient) Status() (mpdplayer.Status, error) {
 	return mpdplayer.Status{Playback: c.playback, Mounts: c.mounts}, c.record("Status", "")
+}
+
+// fakeCuer resolves every disc to res, or fails with err.
+type fakeCuer struct {
+	res *cue.Result
+	err error
+}
+
+func (c *fakeCuer) Resolve(cue.Options) (*cue.Result, error) {
+	return c.res, c.err
 }
 
 type fakeMounter struct {
@@ -194,6 +206,32 @@ func TestPlayerActions(t *testing.T) {
 			err := tt.action(newTestPlayer(client, &fakeMounter{}))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(client.calls, tt.want) {
+				t.Errorf("client calls = %v, want %v", client.calls, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlayDiscResolvesCue(t *testing.T) {
+	tests := []struct {
+		name string
+		cuer cueResolver
+		want []string
+	}{
+		{"resolved", &fakeCuer{res: &cue.Result{CuePath: "/cache/x/playlist.cue"}}, []string{"StartDiscPlayback /dev/sr1 /cache/x/playlist.cue"}},
+		// Without a CUE sheet the tracks are played without metadata
+		{"resolve error", &fakeCuer{err: errFake}, []string{"StartDiscPlayback /dev/sr1"}},
+		{"no cuer", nil, []string{"StartDiscPlayback /dev/sr1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeClient{}
+			p := newTestPlayer(client, &fakeMounter{})
+			p.Cuer = tt.cuer
+			if err := p.PlayDisc("/dev/sr1"); err != nil {
+				t.Fatalf("PlayDisc() error = %v", err)
 			}
 			if !reflect.DeepEqual(client.calls, tt.want) {
 				t.Errorf("client calls = %v, want %v", client.calls, tt.want)

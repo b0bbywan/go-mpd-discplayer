@@ -16,11 +16,13 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-disc-cuer/types"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 const (
@@ -41,6 +43,7 @@ type playerClient interface {
 	DiscPrefixes() []string
 	USBMounts() ([]mpdplayer.Mount, error)
 	Status() (mpdplayer.Status, error)
+	QueuedDisc() (mpdplayer.QueuedDisc, error)
 	Unmount(label string) error
 	UpdateDB(uri string) error
 	Disconnect()
@@ -49,6 +52,11 @@ type playerClient interface {
 // cueResolver writes the CUE sheet of a disc and reads its metadata.
 type cueResolver interface {
 	Resolve(opts cue.Options) (*cue.Result, error)
+	// Cached reads the metadata of the cached sheet of the disc id, without
+	// reading the drive.
+	Cached(id string) (*types.DiscInfo, error)
+	// CuePath is the path of the cached sheet of the disc id.
+	CuePath(id string) string
 }
 
 // deviceMounter exposes USB devices to MPD.
@@ -64,6 +72,8 @@ type Player struct {
 	discSpeed int
 	Client    playerClient
 	Cuer      cueResolver // nil when the cuer config is invalid, discs then play without metadata
+	store     state.Store
+	discFile  state.DiscFile // "" without a runtime directory, a restart then reads the TOC again
 	Notifier  *notifications.Notifier
 	Mounter   deviceMounter
 	scheduler *scheduler
@@ -127,7 +137,12 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 	if cuerConfig, err := config.NewConfig(AppName, AppVersion, cuerCacheLocation); err != nil {
 		log.Printf("Failed to create Cuer Config: %v", err)
 	} else {
-		cuer = cue.New(cuerConfig)
+		cuer = cueCache{Generator: cue.New(cuerConfig), location: cuerConfig.GetCacheLocation()}
+	}
+
+	discFile, err := state.RuntimeDiscFile(AppName)
+	if err != nil {
+		log.Printf("warning: the disc is not kept across restarts: %v", err)
 	}
 
 	mountConfig := mounts.NewMountConfig(
@@ -157,6 +172,7 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 		discSpeed: viper.GetInt("DiscSpeed"),
 		Client:    mpdClient,
 		Cuer:      cuer,
+		discFile:  discFile,
 		Notifier:  notifier,
 		Mounter:   mounter,
 		scheduler: scheduler,
@@ -251,27 +267,8 @@ func (p *Player) PlayDisc(drive string) error {
 			return err
 		}
 	}
-	if err := hwcontrol.SetDiscSpeed(drive, p.discSpeed); err != nil {
-		log.Printf("warning: failed to set disc speed on %s: %v", drive, err)
-	}
-	if err := p.Client.StartDiscPlayback(drive, p.resolveCue(drive)); err != nil {
-		return fmt.Errorf("error adding tracks: %w", err)
-	}
-	return nil
-}
-
-// resolveCue returns the path of the CUE sheet of the disc in drive, "" when
-// it cannot be resolved, the disc then playing without metadata.
-func (p *Player) resolveCue(drive string) string {
-	if p.Cuer == nil {
-		return ""
-	}
-	res, err := p.Cuer.Resolve(cue.Options{Device: drive})
-	if err != nil {
-		log.Printf("warning: failed to resolve the CUE sheet of %s: %v", drive, err)
-		return ""
-	}
-	return res.CuePath
+	p.setDiscSpeed(drive)
+	return p.startDisc(drive, p.resolveDisc(drive))
 }
 
 // PlayURL replaces the queue with url, a webradio for instance, and starts playback.

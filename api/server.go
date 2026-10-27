@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 // Player is the disc player driven by the API.
@@ -22,15 +23,15 @@ type Player interface {
 	StopDisc() error              // stop playback when the disc is playing
 	EjectDisc(drive string) error // eject the disc in drive, "" for the drive holding one
 
-	Mounts() ([]mpdplayer.Mount, error) // list the USB storages mounted in MPD
-	PlayMount(name string) error        // play a USB storage
-	StopMount(name string) error        // stop playback when the USB storage is playing
-	EjectMount(name string) error       // unmount a USB storage from MPD
+	PlayMount(name string) error  // play a USB storage
+	StopMount(name string) error  // stop playback when the USB storage is playing
+	EjectMount(name string) error // unmount a USB storage from MPD
 
 	PlayURL(url string) error // play a stream
 	Stop() error              // stop playback, whatever is playing
 
 	Status() (mpdplayer.Status, error) // playback state and USB storages mounted in MPD
+	State() state.State                // disc in the drive and USB storages mounted in MPD
 }
 
 type Config struct {

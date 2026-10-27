@@ -15,6 +15,7 @@ import (
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 type fakePlayer struct {
@@ -29,9 +30,9 @@ func (f *fakePlayer) Status() (mpdplayer.Status, error) {
 	return f.status, f.err
 }
 
-func (f *fakePlayer) Mounts() ([]mpdplayer.Mount, error) {
-	f.calls = append(f.calls, "mounts")
-	return f.mounts, f.err
+func (f *fakePlayer) State() state.State {
+	f.calls = append(f.calls, "state")
+	return state.State{Mounts: f.mounts}
 }
 
 func (f *fakePlayer) PlayMount(name string) error {
@@ -218,21 +219,6 @@ func TestMounts(t *testing.T) {
 				t.Errorf("body = %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestMountsError(t *testing.T) {
-	tests := []struct {
-		err  error
-		want int
-	}{
-		{fmt.Errorf("error listing mounts: %w", mpdplayer.ErrMPD), http.StatusBadGateway},
-		{errors.New("other failure"), http.StatusInternalServerError},
-	}
-	for _, tt := range tests {
-		if rec := serve(t, &fakePlayer{err: tt.err}, http.MethodGet, "/player/mounts", nil); rec.Code != tt.want {
-			t.Errorf("%v: status = %d, want %d", tt.err, rec.Code, tt.want)
-		}
 	}
 }
 

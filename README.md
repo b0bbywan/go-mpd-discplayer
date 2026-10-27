@@ -33,6 +33,7 @@
 
 - **Automated Audio Disc Playback:** Detects and plays inserted audio discs using `go-disc-cuer` for CUE file generation.
 - **USB Media Playback:** Monitors removable USB drives and plays media files on the MPD server.
+- **Disc Kept Across Restarts:** Remembers the disc in the drive in `$XDG_RUNTIME_DIR/mpd-discplayer/disc.json`, so restarting the daemon during playback never reads the disc again, which would interrupt it.
 - **Robust Reconnection Logic:** Automatically reconnects to the MPD server if the connection is lost.
 - **Flexible Configuration:** Supports configuration via YAML files or environment variables.
 - **Audio Notifications:** Plays sound notifications for device events (insertion, removal) and critical errors.
@@ -129,7 +130,7 @@ Without command, `mpd-discplayer` runs as a daemon. The following commands run a
 | `mount eject <name>` | Stop playback if a file of the USB storage is playing, remove its files from the queue, then unmount it from MPD, so it can be unplugged safely |
 | `stream play <url>` | Clear the MPD queue, add the URL, a webradio for instance, and start playback |
 | `stop` | Stop playback, whatever is playing. The queue is left untouched |
-| `status` | Print the playback state, one `key: value` per line with the keys of [`GET /player/status`](#web-api) and leaving out what is missing, then one `mounts: <name>\t<storage>` line per USB storage mounted in MPD |
+| `status` | Print the playback state, one `key: value` per line with the keys of [`GET /player/status`](#web-api) and leaving out what is missing, then one `mounts: <name>\t<storage>` line per USB storage mounted in MPD. The disc is left out: only the daemon knows it |
 
 | Option | Description |
 |---|---|
@@ -177,15 +178,17 @@ When enabled (see [Web API Options](#web-api-options)), the daemon exposes the s
 | `POST /player/mounts/{name}/eject` | Same as `mount eject <name>` |
 | `POST /player/stream/play` | Same as `stream play`, for an `http` or `https` URL only. JSON body: `{"url": "<url>"}` |
 | `POST /player/stop` | Same as `stop` |
-| `GET /player/status` | Same as `status`, as JSON (see below) |
+| `GET /player/status` | Playback state, disc in the drive and USB storages mounted in MPD, as JSON (see below) |
+| `GET /discs/{id}/cover` | Cover of the disc `id` from the CUE cache, as JPEG. Use the URL given in the status |
 
 With the `symlink` mount method, the mount list is empty and the other mount routes answer `404`.
 
-`GET /player/status` reads the state from MPD:
+`GET /player/status` reads the playback from MPD, the disc and the USB storages from what the daemon knows:
 
 ```json
 {
   "playback": {
+    "at": "2026-10-24T17:46:02.345Z",
     "state": "play",
     "source": "disc",
     "mount": null,
@@ -199,22 +202,43 @@ With the `symlink` mount method, the mount list is empty and the other mount rou
     "elapsed": 102.3,
     "duration": 224
   },
+  "disc": {
+    "id": "9c0bf40c",
+    "device": "/dev/sr0",
+    "status": "ready",
+    "album": "Reprise des negociations",
+    "artist": "Benabar",
+    "date": "2005",
+    "genre": "Chanson",
+    "tracks": ["Le diner", "Maritie et Gilbert Carpentier", "..."],
+    "cover": "discs/9c0bf40c/cover?v=1761327962345"
+  },
   "mounts": [{"name": "MUSIC", "storage": "udisks://by-uuid-3A4F-1C2B"}]
 }
 ```
 
+`playback`:
+- `at`: when the state was read from MPD, in UTC: `elapsed` is the time played at that moment.
 - `state`: `play`, `pause` or `stop`.
 - `source`: where the current song comes from: `disc`, `mount` (its name in `mount`), `stream` (its URL in `url`, the station name in `name` when the webradio sends one) or `library`.
 - `position`: position of the current song in the queue, from 1; `length`: number of songs in the queue.
-- `elapsed` and `duration` are in seconds; `duration` is `null` for a stream.
+- `elapsed` and `duration` are in seconds; `duration` is `null` for a stream, and for the first seconds of a disc while the drive spins up.
 - A field is `null` when there is no current song, or when the tag is missing.
 
-A successful action answers `202 Accepted`. When MPD cannot be reached or fails the request, a route answers `502 Bad Gateway`. When no drive or several drives hold a disc, an action answers `409 Conflict`, an unknown mount name `404`, an invalid request body `400`, `413` or `415`, other failures `500`, with the error as plain text. CORS allows any origin.
+`disc`, `null` without an audio disc in a drive:
+- `status`: `resolving` while the disc metadata is looked up after insertion, only `device` being known, then `ready`.
+- `id`: the disc id in the CUE cache; `album`, `artist`, `date`, `genre` and `tracks` (the track titles, in order) come from its CUE file. A disc unknown to GNUDB and MusicBrainz has no `id` nor metadata, and one empty title per track.
+- `cover`: URL of the cover, relative to the API, `null` without one. It changes with the cover, so it can be cached forever.
+
+`mounts`: the USB storages mounted in MPD, the same list as `GET /player/mounts`.
+
+A successful action answers `202 Accepted`. When MPD cannot be reached or fails the request, a route answers `502 Bad Gateway`. When no drive or several drives hold a disc, an action answers `409 Conflict`, an unknown mount name or a missing cover `404`, an invalid request body `400`, `413` or `415`, other failures `500`, with the error as plain text. CORS allows any origin.
 
 ```bash
 curl -X POST http://127.0.0.1:8019/player/disc/eject
 curl http://127.0.0.1:8019/player/status
 curl http://127.0.0.1:8019/player/mounts
+curl -o cover.jpg http://127.0.0.1:8019/discs/9c0bf40c/cover
 curl -X POST http://127.0.0.1:8019/player/mounts/MYUSB/play
 curl -X POST -H 'Content-Type: application/json' -d '{"url": "https://stream.example.com/radio.mp3"}' http://127.0.0.1:8019/player/stream/play
 curl -X POST --unix-socket /run/user/1000/mpd-discplayer.sock http://localhost/player/disc/eject

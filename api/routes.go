@@ -6,6 +6,7 @@ import (
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 type mountResponse struct {
@@ -15,11 +16,16 @@ type mountResponse struct {
 
 type statusResponse struct {
 	Playback playbackResponse `json:"playback"`
+	Disc     *discResponse    `json:"disc"`
 	Mounts   []mountResponse  `json:"mounts"`
 }
 
+// atLayout is RFC 3339 with milliseconds, precise enough to move elapsed on.
+const atLayout = "2006-01-02T15:04:05.000Z07:00"
+
 // playbackResponse is the playback state, null standing for what is missing.
 type playbackResponse struct {
+	At       string   `json:"at"`
 	State    string   `json:"state"`
 	Source   *string  `json:"source"`
 	Mount    *string  `json:"mount"`
@@ -34,10 +40,31 @@ type playbackResponse struct {
 	Duration *float64 `json:"duration"`
 }
 
+// discResponse is the disc in the drive, null standing for what is not known:
+// everything but the device while it is resolving, the metadata of a disc
+// unknown to the metadata sources.
+type discResponse struct {
+	ID     *string  `json:"id"`
+	Device string   `json:"device"`
+	Status string   `json:"status"`
+	Album  *string  `json:"album"`
+	Artist *string  `json:"artist"`
+	Date   *string  `json:"date"`
+	Genre  *string  `json:"genre"`
+	Tracks []string `json:"tracks"`
+}
+
 func (s *Server) registerPlayerRoutes(p Player) {
 	s.mux.HandleFunc(
 		"GET /player/status",
-		withJSON(p.Status, newStatusResponse),
+		func(w http.ResponseWriter, r *http.Request) {
+			st, err := p.Status()
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, newStatusResponse(st.Playback, p.State()))
+		},
 	)
 	s.mux.HandleFunc(
 		"POST /player/stop",
@@ -120,19 +147,6 @@ func withAction(fn func() error) http.HandlerFunc {
 	}
 }
 
-// withJSON wraps a player read into an http.HandlerFunc writing its result,
-// turned into a response by toResponse, as JSON.
-func withJSON[T, R any](fn func() (T, error), toResponse func(T) R) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		v, err := fn()
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, toResponse(v))
-	}
-}
-
 // newMountsResponse lists the mounts, as an empty list rather than null when
 // there is none.
 func newMountsResponse(mounts []mpdplayer.Mount) []mountResponse {
@@ -150,9 +164,19 @@ func withMount(fn func(name string) error) http.HandlerFunc {
 	}
 }
 
-func newStatusResponse(st mpdplayer.Status) statusResponse {
-	pb := st.Playback
-	res := playbackResponse{
+// newStatusResponse is the status object: the playback read from MPD, the
+// disc and the mounts from the player state.
+func newStatusResponse(pb mpdplayer.Playback, st state.State) statusResponse {
+	return statusResponse{
+		Playback: newPlaybackResponse(pb),
+		Disc:     newDiscResponse(st.Disc),
+		Mounts:   newMountsResponse(st.Mounts),
+	}
+}
+
+func newPlaybackResponse(pb mpdplayer.Playback) playbackResponse {
+	return playbackResponse{
+		At:       pb.At.UTC().Format(atLayout),
 		State:    pb.State,
 		Source:   nonZero(pb.Source),
 		Mount:    nonZero(pb.Mount),
@@ -166,7 +190,22 @@ func newStatusResponse(st mpdplayer.Status) statusResponse {
 		Elapsed:  pb.Elapsed,
 		Duration: pb.Duration,
 	}
-	return statusResponse{Playback: res, Mounts: newMountsResponse(st.Mounts)}
+}
+
+func newDiscResponse(disc *state.Disc) *discResponse {
+	if disc == nil {
+		return nil
+	}
+	return &discResponse{
+		ID:     nonZero(disc.ID),
+		Device: disc.Device,
+		Status: string(disc.Status),
+		Album:  nonZero(disc.Album),
+		Artist: nonZero(disc.Artist),
+		Date:   nonZero(disc.Date),
+		Genre:  nonZero(disc.Genre),
+		Tracks: disc.Tracks,
+	}
 }
 
 // nonZero points to v, nil when v is the zero value.

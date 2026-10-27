@@ -21,6 +21,7 @@ import (
 type fakePlayer struct {
 	calls  []string
 	err    error
+	disc   *state.Disc
 	mounts []mpdplayer.Mount
 	status mpdplayer.Status
 }
@@ -32,7 +33,7 @@ func (f *fakePlayer) Status() (mpdplayer.Status, error) {
 
 func (f *fakePlayer) State() state.State {
 	f.calls = append(f.calls, "state")
-	return state.State{Mounts: f.mounts}
+	return state.State{Disc: f.disc, Mounts: f.mounts}
 }
 
 func (f *fakePlayer) PlayMount(name string) error {
@@ -226,38 +227,55 @@ func ptr(f float64) *float64 { return &f }
 
 func TestStatus(t *testing.T) {
 	usb := []mpdplayer.Mount{{Name: "MUSIC", Storage: "udisks://by-uuid-3A4F-1C2B"}}
+	at := time.Date(2026, 10, 24, 17, 46, 2, 345e6, time.UTC)
+	const atJSON = `"at":"2026-10-24T17:46:02.345Z"`
+	stopped := mpdplayer.Playback{At: at, State: "stop"}
+	const stoppedJSON = `{` + atJSON + `,"state":"stop","source":null,"mount":null,"title":null,"artist":null,` +
+		`"album":null,"name":null,"url":null,"position":null,"length":0,"elapsed":null,"duration":null}`
 	tests := []struct {
-		name   string
-		status mpdplayer.Status
-		want   string
+		name     string
+		playback mpdplayer.Playback
+		disc     *state.Disc
+		mounts   []mpdplayer.Mount
+		want     string
 	}{
-		{"disc", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
-			State: "play", Source: mpdplayer.SourceDisc,
+		{"disc", mpdplayer.Playback{
+			At: at, State: "play", Source: mpdplayer.SourceDisc,
 			Title: "Bruxelles", Artist: "Benabar", Album: "Reprise des negociations",
 			Position: 4, Length: 12, Elapsed: ptr(102.3), Duration: ptr(224),
-		}}, `{"playback":{"state":"play","source":"disc","mount":null,"title":"Bruxelles","artist":"Benabar",` +
+		}, &state.Disc{
+			ID: "9c0bf40c", Device: "/dev/sr0", Status: state.Ready,
+			Album: "Reprise des negociations", Artist: "Benabar", Date: "2005", Genre: "Chanson",
+			Tracks: []string{"Le diner", "Bruxelles"}, Cover: "/cache/9c0bf40c/cover.jpg",
+		}, usb, `{"playback":{` + atJSON + `,"state":"play","source":"disc","mount":null,"title":"Bruxelles","artist":"Benabar",` +
 			`"album":"Reprise des negociations","name":null,"url":null,"position":4,"length":12,"elapsed":102.3,"duration":224},` +
+			`"disc":{"id":"9c0bf40c","device":"/dev/sr0","status":"ready","album":"Reprise des negociations","artist":"Benabar",` +
+			`"date":"2005","genre":"Chanson","tracks":["Le diner","Bruxelles"]},` +
 			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
-		{"mount", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
-			State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
+		{"mount", mpdplayer.Playback{
+			At: at.In(time.FixedZone("CET", 3600)), State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
 			Position: 1, Length: 1, Elapsed: ptr(0), Duration: ptr(60),
-		}}, `{"playback":{"state":"pause","source":"mount","mount":"MUSIC","title":null,"artist":null,` +
+		}, nil, usb, `{"playback":{` + atJSON + `,"state":"pause","source":"mount","mount":"MUSIC","title":null,"artist":null,` +
 			`"album":null,"name":null,"url":null,"position":1,"length":1,"elapsed":0,"duration":60},` +
-			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
-		{"stream", mpdplayer.Status{Playback: mpdplayer.Playback{
-			State: "play", Source: mpdplayer.SourceStream, URL: "https://radio.example/live",
+			`"disc":null,"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
+		{"stream", mpdplayer.Playback{
+			At: at, State: "play", Source: mpdplayer.SourceStream, URL: "https://radio.example/live",
 			Title: "Live", Name: "Radio", Position: 1, Length: 1, Elapsed: ptr(12),
-		}}, `{"playback":{"state":"play","source":"stream","mount":null,"title":"Live","artist":null,` +
+		}, nil, nil, `{"playback":{` + atJSON + `,"state":"play","source":"stream","mount":null,"title":"Live","artist":null,` +
 			`"album":null,"name":"Radio","url":"https://radio.example/live","position":1,"length":1,"elapsed":12,"duration":null},` +
-			`"mounts":[]}`},
-		{"stopped", mpdplayer.Status{Playback: mpdplayer.Playback{State: "stop"}},
-			`{"playback":{"state":"stop","source":null,"mount":null,"title":null,"artist":null,` +
-				`"album":null,"name":null,"url":null,"position":null,"length":0,"elapsed":null,"duration":null},` +
-				`"mounts":[]}`},
+			`"disc":null,"mounts":[]}`},
+		{"stopped", stopped, nil, nil, `{"playback":` + stoppedJSON + `,"disc":null,"mounts":[]}`},
+		{"disc resolving", stopped, &state.Disc{Device: "/dev/sr0", Status: state.Resolving}, nil,
+			`{"playback":` + stoppedJSON + `,"disc":{"id":null,"device":"/dev/sr0","status":"resolving",` +
+				`"album":null,"artist":null,"date":null,"genre":null,"tracks":null},"mounts":[]}`},
+		{"unknown disc", stopped, &state.Disc{Device: "/dev/sr0", Status: state.Ready, Tracks: []string{"", ""}}, nil,
+			`{"playback":` + stoppedJSON + `,"disc":{"id":null,"device":"/dev/sr0","status":"ready",` +
+				`"album":null,"artist":null,"date":null,"genre":null,"tracks":["",""]},"mounts":[]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := serve(t, &fakePlayer{status: tt.status}, http.MethodGet, "/player/status", nil)
+			player := &fakePlayer{status: mpdplayer.Status{Playback: tt.playback}, disc: tt.disc, mounts: tt.mounts}
+			rec := serve(t, player, http.MethodGet, "/player/status", nil)
 			if rec.Code != http.StatusOK {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 			}

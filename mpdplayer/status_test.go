@@ -3,6 +3,7 @@ package mpdplayer
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func ptr(f float64) *float64 { return &f }
@@ -40,10 +41,15 @@ func TestStatus(t *testing.T) {
 			f.mounts = []fakeMount{{usb.Name, usb.Storage}, {"NAS", "nfs://nas/music"}}
 			client := f.start(t)
 
+			before := time.Now()
 			got, err := client.Status()
 			if err != nil {
 				t.Fatal(err)
 			}
+			if got.Playback.At.Before(before) || got.Playback.At.After(time.Now()) {
+				t.Errorf("At = %v, want the time of the call", got.Playback.At)
+			}
+			got.Playback.At = time.Time{}
 			if !reflect.DeepEqual(got.Playback, tt.want) {
 				t.Errorf("Playback = %+v, want %+v", got.Playback, tt.want)
 			}

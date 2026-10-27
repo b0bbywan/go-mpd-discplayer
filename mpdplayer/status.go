@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fhs/gompd/v2/mpd"
 )
@@ -19,11 +20,12 @@ const (
 
 // Playback is the MPD playback state and the song it is on.
 type Playback struct {
-	State    string // play, pause or stop
-	Source   string // one of the Source constants, "" without a current song
-	Mount    string // name of the USB storage the song is on, for SourceMount
-	Title    string // tags of the current song, "" when missing
-	Artist   string // the album artist when the song has no artist, as with a disc CUE file
+	At       time.Time // when the state was read, the time Elapsed stands for
+	State    string    // play, pause or stop
+	Source   string    // one of the Source constants, "" without a current song
+	Mount    string    // name of the USB storage the song is on, for SourceMount
+	Title    string    // tags of the current song, "" when missing
+	Artist   string    // the album artist when the song has no artist, as with a disc CUE file
 	Album    string
 	Name     string   // stream name, sent by webradios
 	URL      string   // stream URL, for SourceStream
@@ -43,6 +45,7 @@ type Status struct {
 func (rc *ReconnectingMPDClient) Status() (Status, error) {
 	var st Status
 	err := rc.execute(func(client *mpd.Client) error {
+		at := time.Now()
 		status, err := client.Status()
 		if err != nil {
 			return fmt.Errorf("failed to get MPD status: %w", err)
@@ -55,15 +58,16 @@ func (rc *ReconnectingMPDClient) Status() (Status, error) {
 		if err != nil {
 			return err
 		}
-		st = Status{Playback: newPlayback(status, song, rc.DiscPrefixes(), mounts), Mounts: mounts}
+		st = Status{Playback: newPlayback(at, status, song, rc.DiscPrefixes(), mounts), Mounts: mounts}
 		return nil
 	})
 	return st, err
 }
 
-func newPlayback(status, song mpd.Attrs, discPrefixes []string, mounts []Mount) Playback {
+func newPlayback(at time.Time, status, song mpd.Attrs, discPrefixes []string, mounts []Mount) Playback {
 	file := song["file"]
 	pb := Playback{
+		At:       at,
 		State:    status["state"],
 		Title:    song["Title"],
 		Artist:   cmp.Or(song["Artist"], song["AlbumArtist"]),

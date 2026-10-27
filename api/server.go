@@ -32,6 +32,8 @@ type Player interface {
 
 	Status() (mpdplayer.Status, error) // playback state and USB storages mounted in MPD
 	State() state.State                // disc in the drive and USB storages mounted in MPD
+
+	DiscCover(id string) (string, error) // path of the cached cover of a disc, fs.ErrNotExist without one
 }
 
 type Config struct {

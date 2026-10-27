@@ -26,6 +26,8 @@ type fakeMPD struct {
 	mounts    []fakeMount
 	neighbors []string
 	commands  []string
+	// playlists maps a playlist path to its songs, for load
+	playlists map[string][]string
 	// updating is the number of status calls that still report a database update
 	updating int
 	// tags, elapsed and duration describe the current song
@@ -93,6 +95,12 @@ func (f *fakeMPD) handle(line string) string {
 		f.queue, f.current = nil, -1
 	case "add":
 		f.queue = append(f.queue, args[0])
+	case "load":
+		songs, ok := f.playlists[args[0]]
+		if !ok {
+			return "ACK [50@0] {load} No such playlist\n"
+		}
+		f.queue = append(f.queue, songs...)
 	case "play":
 		if len(f.queue) > 0 {
 			f.current = 0

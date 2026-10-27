@@ -102,6 +102,7 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return err
 			}
+			player.refreshMounts()
 			if err = player.Client.StartUSBPlayback(relPath); err != nil {
 				return fmt.Errorf("[%s] Error starting %s:%s USB playback: %w", detect.DeviceUSB, dev.Path(), relPath, err)
 			}
@@ -110,6 +111,7 @@ func (player *Player) newUSBHandler() {
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
 			relPath, err := player.Mounter.Unmount(dev.Udev())
+			player.refreshMounts()
 			if err != nil {
 				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
 			}
@@ -124,6 +126,7 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return err
 			}
+			player.refreshMounts()
 			if err = player.Client.UpdateDB(relPath); err != nil {
 				return fmt.Errorf("[%s] Error updating database for %s:%s: %w", detect.DeviceUSB, dev.Path(), relPath, err)
 			}

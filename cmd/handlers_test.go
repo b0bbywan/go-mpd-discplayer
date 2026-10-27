@@ -162,14 +162,14 @@ func TestDeviceHandlers(t *testing.T) {
 		// Without disc file nor cuer, the disc is kept once MPD tells it is not playing
 		{kind: detect.DeviceDisc, event: detect.DevicePresent, wantClient: []string{"Status"}},
 
-		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "StartUSBPlayback KEY"}},
 		{kind: detect.DeviceUSB, event: detect.DeviceAdded, mountErr: errFake, wantMounter: []string{"Mount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DeviceAdded, fail: "StartUSBPlayback", wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, wantMounter: []string{"Unmount"}, wantClient: []string{"StopAndRemove KEY"}},
-		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, mountErr: errFake, wantMounter: []string{"Unmount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DevicePresent, wantMounter: []string{"Mount"}, wantClient: []string{"UpdateDB KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceAdded, fail: "StartUSBPlayback", wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "StartUSBPlayback KEY"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, wantMounter: []string{"Unmount"}, wantClient: []string{"USBMounts", "StopAndRemove KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, mountErr: errFake, wantMounter: []string{"Unmount"}, wantClient: []string{"USBMounts"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DevicePresent, wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "UpdateDB KEY"}},
 		{kind: detect.DeviceUSB, event: detect.DevicePresent, mountErr: errFake, wantMounter: []string{"Mount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DevicePresent, fail: "UpdateDB", wantMounter: []string{"Mount"}, wantClient: []string{"UpdateDB KEY"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DevicePresent, fail: "UpdateDB", wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "UpdateDB KEY"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		name := fmt.Sprintf("%s_%s_mountErr=%v_fail=%s", tt.kind, tt.event, tt.mountErr != nil, tt.fail)
@@ -189,6 +189,33 @@ func TestDeviceHandlers(t *testing.T) {
 				t.Errorf("client calls = %v, want %v", client.calls, tt.wantClient)
 			}
 		})
+	}
+}
+
+func TestRefreshMounts(t *testing.T) {
+	usb := []mpdplayer.Mount{{Name: "MYUSB", Storage: "udisks://x"}}
+	client := &fakeClient{mounts: usb}
+	p := newTestPlayer(client, &fakeMounter{relPath: "MYUSB"})
+
+	if err := callHandler(t, p, detect.DeviceUSB, detect.DeviceAdded); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.State().Mounts; !reflect.DeepEqual(got, usb) {
+		t.Errorf("state mounts = %v, want %v", got, usb)
+	}
+
+	// MPD unreachable: the state keeps the previous list
+	client.mounts = nil
+	client.fail = map[string]bool{"USBMounts": true}
+	p.refreshMounts()
+	if got := p.State().Mounts; !reflect.DeepEqual(got, usb) {
+		t.Errorf("state mounts after a failed refresh = %v, want %v", got, usb)
+	}
+
+	client.fail = nil
+	p.refreshMounts()
+	if got := p.State().Mounts; got != nil {
+		t.Errorf("state mounts after unmount = %v, want none", got)
 	}
 }
 
@@ -213,7 +240,7 @@ func TestPlayerActions(t *testing.T) {
 		{"PlayMount", func(p *Player) error { return p.PlayMount("MYUSB") }, []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"StopMount", func(p *Player) error { return p.StopMount("MYUSB") }, []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
 		{"ClearMount", func(p *Player) error { return p.ClearMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/"}, false},
-		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
+		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB", "USBMounts"}, false},
 		// An unknown mount is rejected before touching the player
 		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
 		{"ClearMount unknown", func(p *Player) error { return p.ClearMount("NAS") }, []string{"USBMounts"}, true},
@@ -226,7 +253,7 @@ func TestPlayerActions(t *testing.T) {
 		{"ExecuteAction mount play", run(Action{Name: ActionMountPlay, Mount: "MYUSB"}), []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"ExecuteAction mount stop", run(Action{Name: ActionMountStop, Mount: "MYUSB"}), []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
 		{"ExecuteAction mount clear", run(Action{Name: ActionMountClear, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/"}, false},
-		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
+		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB", "USBMounts"}, false},
 		{"ExecuteAction stream play", run(Action{Name: ActionStreamPlay, URL: "http://radio/stream"}), []string{"StartPlayback http://radio/stream"}, false},
 		{"ExecuteAction stop", run(Action{Name: ActionStop}), []string{"Stop"}, false},
 		{"ExecuteAction status", run(Action{Name: ActionStatus}), []string{"Status"}, false},

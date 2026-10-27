@@ -11,6 +11,9 @@ import (
 // ErrMPD is returned when MPD cannot be reached or fails a command.
 var ErrMPD = errors.New("mpd error")
 
+// ErrUnknownMount is returned for a name that is not a USB storage mounted in MPD.
+var ErrUnknownMount = errors.New("no USB storage mounted in MPD with this name")
+
 func isConnError(err error) bool {
 	if err == nil {
 		return false

@@ -18,8 +18,29 @@ import (
 )
 
 type fakePlayer struct {
-	calls []string
-	err   error
+	calls  []string
+	err    error
+	mounts []mpdplayer.Mount
+}
+
+func (f *fakePlayer) Mounts() ([]mpdplayer.Mount, error) {
+	f.calls = append(f.calls, "mounts")
+	return f.mounts, f.err
+}
+
+func (f *fakePlayer) PlayMount(name string) error {
+	f.calls = append(f.calls, "play_mount "+name)
+	return f.err
+}
+
+func (f *fakePlayer) StopMount(name string) error {
+	f.calls = append(f.calls, "stop_mount "+name)
+	return f.err
+}
+
+func (f *fakePlayer) EjectMount(name string) error {
+	f.calls = append(f.calls, "eject_mount "+name)
+	return f.err
 }
 
 func (f *fakePlayer) PlayDisc(drive string) error {
@@ -72,6 +93,10 @@ func TestPlayerRoutes(t *testing.T) {
 		{"/player/disc/play", "play"},
 		{"/player/disc/stop", "stop_disc"},
 		{"/player/disc/eject", "eject"},
+		{"/player/mounts/MYUSB/play", "play_mount MYUSB"},
+		{"/player/mounts/MYUSB/stop", "stop_mount MYUSB"},
+		{"/player/mounts/MYUSB/eject", "eject_mount MYUSB"},
+		{"/player/mounts/MY%20USB/play", "play_mount MY USB"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
@@ -157,6 +182,54 @@ func TestPlayerRouteMPDError(t *testing.T) {
 	}
 }
 
+func TestPlayerRouteUnknownMount(t *testing.T) {
+	player := &fakePlayer{err: fmt.Errorf("NAS: %w", mpdplayer.ErrUnknownMount)}
+	if rec := serve(t, player, http.MethodPost, "/player/mounts/NAS/play", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestMounts(t *testing.T) {
+	tests := []struct {
+		name   string
+		mounts []mpdplayer.Mount
+		want   string
+	}{
+		{"mounts", []mpdplayer.Mount{{Name: "MYUSB", Storage: "udisks://a"}},
+			`[{"name":"MYUSB","storage":"udisks://a"}]` + "\n"},
+		{"none", nil, "[]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(t, &fakePlayer{mounts: tt.mounts}, http.MethodGet, "/player/mounts", nil)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			if got := rec.Header().Get("Content-Type"); got != "application/json" {
+				t.Errorf("Content-Type = %q", got)
+			}
+			if got := rec.Body.String(); got != tt.want {
+				t.Errorf("body = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMountsError(t *testing.T) {
+	tests := []struct {
+		err  error
+		want int
+	}{
+		{fmt.Errorf("error listing mounts: %w", mpdplayer.ErrMPD), http.StatusBadGateway},
+		{errors.New("other failure"), http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		if rec := serve(t, &fakePlayer{err: tt.err}, http.MethodGet, "/player/mounts", nil); rec.Code != tt.want {
+			t.Errorf("%v: status = %d, want %d", tt.err, rec.Code, tt.want)
+		}
+	}
+}
+
 func TestPlayerRoutesArePostOnly(t *testing.T) {
 	player := &fakePlayer{}
 	if rec := serve(t, player, http.MethodGet, "/player/disc/play", nil); rec.Code != http.StatusMethodNotAllowed {
@@ -190,7 +263,7 @@ func TestCORSPreflight(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "POST, OPTIONS" {
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
 		t.Errorf("Access-Control-Allow-Methods = %q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {

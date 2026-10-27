@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,8 +105,41 @@ func (rc *ReconnectingMPDClient) UpdateDB(uri string) error {
 	})
 }
 
+// Mount is a USB storage mounted in MPD.
+type Mount struct {
+	Name    string // mount path in the MPD library
+	Storage string // udisks URI
+}
+
+// USBMounts lists the USB storages mounted in MPD. Other storages (nfs,
+// smb...) are left out.
+func (rc *ReconnectingMPDClient) USBMounts() ([]Mount, error) {
+	var usb []Mount
+	err := rc.execute(func(client *mpd.Client) error {
+		var err error
+		usb, err = usbMounts(client)
+		return err
+	})
+	return usb, err
+}
+
+// MountPrefix is the path prefix of the files of the mount named name, the
+// trailing slash keeping MYUSB from matching MYUSB2.
+func MountPrefix(name string) string {
+	return name + "/"
+}
+
+// Unmount unmounts label from MPD. A label already unmounted, by an eject
+// from the API for instance, is not an error.
 func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
+		mounts, err := listMounts(client)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(mounts, func(m mpd.Attrs) bool { return m["mount"] == label }) {
+			return nil
+		}
 		if err := unmount(client, label); err != nil {
 			return fmt.Errorf("failed to unmount %s: %w", label, err)
 		}
@@ -353,6 +387,20 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 		return nil, fmt.Errorf("failed to list MPD mounts: %w", err)
 	}
 	return res, nil
+}
+
+func usbMounts(client *mpd.Client) ([]Mount, error) {
+	mounts, err := listMounts(client)
+	if err != nil {
+		return nil, err
+	}
+	var usb []Mount
+	for _, m := range mounts {
+		if m["mount"] != "" && strings.HasPrefix(m["storage"], udisksScheme) {
+			usb = append(usb, Mount{Name: m["mount"], Storage: m["storage"]})
+		}
+	}
+	return usb, nil
 }
 
 // isMounted reports whether label is already mounted on a storage matching

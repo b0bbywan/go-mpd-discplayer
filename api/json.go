@@ -55,6 +55,14 @@ func withBody[T any](
 	}
 }
 
+// writeJSON writes v as the JSON response body.
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("[api] failed to write response: %v", err)
+	}
+}
+
 // validateStream accepts http and https URLs only: the route is meant for
 // webradios, not for files on the player.
 func validateStream(req *streamRequest) error {

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 // Player is the disc player driven by the API.
@@ -19,6 +21,11 @@ type Player interface {
 	PlayDisc(drive string) error  // play the disc in drive, "" for the drive holding an audio disc
 	StopDisc() error              // stop playback when the disc is playing
 	EjectDisc(drive string) error // eject the disc in drive, "" for the drive holding one
+
+	Mounts() ([]mpdplayer.Mount, error) // list the USB storages mounted in MPD
+	PlayMount(name string) error        // play a USB storage
+	StopMount(name string) error        // stop playback when the USB storage is playing
+	EjectMount(name string) error       // unmount a USB storage from MPD
 
 	PlayURL(url string) error // play a stream
 	Stop() error              // stop playback, whatever is playing
@@ -143,7 +150,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.WriteHeader(http.StatusNoContent)
 			return

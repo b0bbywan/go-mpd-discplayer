@@ -3,8 +3,6 @@ package mpdplayer
 import (
 	"fmt"
 	"time"
-
-	"github.com/b0bbywan/go-disc-cuer/config"
 )
 
 type MPDConn struct {
@@ -12,7 +10,6 @@ type MPDConn struct {
 	Address       string // socket path or TCP address
 	ReconnectWait time.Duration
 	CueFolder     string // folder of the disc CUE sheets in the MPD library, "" when out of it
-	CuerConfig    *config.Config
 }
 
 func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cueFolder string) (*MPDConn, error) {
@@ -38,8 +35,4 @@ func validateMPDConnection(conn *MPDConn) error {
 		return fmt.Errorf("MPDConnection.Address cannot be empty")
 	}
 	return nil
-}
-
-func (rc *ReconnectingMPDClient) SetCuerConfig(cuerConfig *config.Config) {
-	rc.mpcConfig.CuerConfig = cuerConfig
 }

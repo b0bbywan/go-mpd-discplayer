@@ -59,7 +59,9 @@ func (s *Server) registerPlayerRoutes(p Player) {
 
 	s.mux.HandleFunc(
 		"GET /player/mounts",
-		withJSON(p.Mounts, newMountsResponse),
+		func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, newMountsResponse(p.State().Mounts))
+		},
 	)
 	s.mux.HandleFunc(
 		"POST /player/mounts/{name}/play",

@@ -13,6 +13,7 @@ import (
 	"github.com/jochenvg/go-udev"
 
 	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-disc-cuer/types"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -27,6 +28,7 @@ type fakeClient struct {
 	fail     map[string]bool
 	mounts   []mpdplayer.Mount
 	playback mpdplayer.Playback
+	queued   mpdplayer.QueuedDisc
 }
 
 func (c *fakeClient) record(name, arg string) error {
@@ -62,18 +64,41 @@ func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 	return c.mounts, c.record("USBMounts", "")
 }
 
+func (c *fakeClient) QueuedDisc() (mpdplayer.QueuedDisc, error) {
+	return c.queued, c.record("QueuedDisc", "")
+}
+
 func (c *fakeClient) Status() (mpdplayer.Status, error) {
 	return mpdplayer.Status{Playback: c.playback, Mounts: c.mounts}, c.record("Status", "")
 }
 
-// fakeCuer resolves every disc to res, or fails with err.
+// fakeCuer resolves every disc to res, or fails with err, and reads info as
+// the cached metadata, or fails with cachedErr. It records its calls.
 type fakeCuer struct {
-	res *cue.Result
-	err error
+	res       *cue.Result
+	err       error
+	info      *types.DiscInfo
+	cachedErr error
+	onResolve func() // run when Resolve is called
+	cacheDir  string // cache directory, one subdirectory per disc id
+	calls     []string
 }
 
-func (c *fakeCuer) Resolve(cue.Options) (*cue.Result, error) {
+func (c *fakeCuer) CuePath(id string) string {
+	return filepath.Join(c.cacheDir, id, "playlist.cue")
+}
+
+func (c *fakeCuer) Resolve(opts cue.Options) (*cue.Result, error) {
+	c.calls = append(c.calls, "Resolve "+opts.Device)
+	if c.onResolve != nil {
+		c.onResolve()
+	}
 	return c.res, c.err
+}
+
+func (c *fakeCuer) Cached(id string) (*types.DiscInfo, error) {
+	c.calls = append(c.calls, "Cached "+id)
+	return c.info, c.cachedErr
 }
 
 type fakeMounter struct {
@@ -134,7 +159,8 @@ func TestDeviceHandlers(t *testing.T) {
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, wantClient: []string{"StartDiscPlayback /dev/fake"}},
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, fail: "StartDiscPlayback", wantClient: []string{"StartDiscPlayback /dev/fake"}, wantErr: true},
 		{kind: detect.DeviceDisc, event: detect.DeviceRemoved, wantClient: []string{"StopAndRemove cdda:// .disc-cuer/"}},
-		{kind: detect.DeviceDisc, event: detect.DevicePresent},
+		// Without disc file nor cuer, the disc is kept once MPD tells it is not playing
+		{kind: detect.DeviceDisc, event: detect.DevicePresent, wantClient: []string{"Status"}},
 
 		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}},
 		{kind: detect.DeviceUSB, event: detect.DeviceAdded, mountErr: errFake, wantMounter: []string{"Mount"}, wantErr: true},

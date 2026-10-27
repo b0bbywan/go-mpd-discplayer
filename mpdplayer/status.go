@@ -116,3 +116,48 @@ func optionalFloat(attrs mpd.Attrs, key string) *float64 {
 	}
 	return &f
 }
+
+// QueuedDisc is the disc as MPD has it in the queue.
+type QueuedDisc struct {
+	CuePath string // last playlist loaded, the disc CUE sheet when the disc was loaded from one
+	Album   string // tags of the first disc track
+	Artist  string // the album artist, the PERFORMER of the CUE sheet
+	Date    string
+	Genre   string
+	Tracks  []string // titles of the disc tracks, in queue order
+}
+
+// QueuedDisc reads the disc tracks of the queue and the last playlist loaded.
+func (rc *ReconnectingMPDClient) QueuedDisc() (QueuedDisc, error) {
+	var qd QueuedDisc
+	err := rc.execute(func(client *mpd.Client) error {
+		status, err := client.Status()
+		if err != nil {
+			return fmt.Errorf("failed to get MPD status: %w", err)
+		}
+		songs, err := client.PlaylistInfo(-1, -1)
+		if err != nil {
+			return fmt.Errorf("failed to fetch MPD playlist: %w", err)
+		}
+		qd = newQueuedDisc(status["lastloadedplaylist"], songs, rc.DiscPrefixes())
+		return nil
+	})
+	return qd, err
+}
+
+func newQueuedDisc(cuePath string, songs []mpd.Attrs, discPrefixes []string) QueuedDisc {
+	qd := QueuedDisc{CuePath: cuePath}
+	for _, song := range songs {
+		if !checkSongPath(song, discPrefixes) {
+			continue
+		}
+		if qd.Tracks == nil {
+			qd.Album = song["Album"]
+			qd.Artist = cmp.Or(song["AlbumArtist"], song["Artist"])
+			qd.Date = song["Date"]
+			qd.Genre = song["Genre"]
+		}
+		qd.Tracks = append(qd.Tracks, song["Title"])
+	}
+	return qd
+}

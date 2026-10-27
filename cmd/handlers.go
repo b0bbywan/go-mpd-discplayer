@@ -68,20 +68,26 @@ func (player *Player) newDiscHandler() {
 		detect.DeviceDisc,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			if err := player.PlayDisc(dev.Path()); err != nil {
+			if err := player.insertDisc(dev.Path()); err != nil {
 				return fmt.Errorf("[%s] Error starting %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
+			player.removeDisc()
 			if err := player.Client.StopAndRemove(player.Client.DiscPrefixes()...); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},
-		// processPresent: no autoplay at startup
-		nil,
+		// processPresent: keep the disc in the state, no autoplay at startup
+		func(ctx context.Context, dev detect.Device) error {
+			if err := player.presentDisc(dev.Path()); err != nil {
+				return fmt.Errorf("[%s] Error reading %s at startup: %w", detect.DeviceDisc, dev.Path(), err)
+			}
+			return nil
+		},
 	)
 
 	player.handlers = append(player.handlers, discHandler)

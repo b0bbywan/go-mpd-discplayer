@@ -42,7 +42,7 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 	// Ensure connection is valid
 	if rc.client == nil {
 		if err := rc.connectWithoutLock(); err != nil {
-			return fmt.Errorf("reconnection failed: %w", err)
+			return fmt.Errorf("%w: reconnection failed: %w", ErrMPD, err)
 		}
 	}
 
@@ -51,13 +51,13 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 			if isConnError(err) {
 				log.Printf("Connection error detected: %v. Reconnecting...", err)
 				if reconnectErr := rc.Reconnect(); reconnectErr != nil {
-					return fmt.Errorf("reconnection failed: %w", reconnectErr)
+					return fmt.Errorf("%w: reconnection failed: %w", ErrMPD, reconnectErr)
 				}
 				// After reconnection, retry loadFunc
 				continue
 			}
 			// For non-connection errors, return immediately
-			return fmt.Errorf("function execution error: %w", err)
+			return markMPDError(fmt.Errorf("function execution error: %w", err))
 		}
 		// If loadFunc succeeds, break the loop
 		break

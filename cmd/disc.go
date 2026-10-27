@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/b0bbywan/go-disc-cuer/cue"
@@ -32,6 +33,23 @@ func (c cueCache) Cached(id string) (*types.DiscInfo, error) {
 
 func (c cueCache) CuePath(id string) string {
 	return utils.CachePlaylistPath(c.location, id)
+}
+
+func (c cueCache) CoverPath(id string) string {
+	return utils.CacheCoverArtPath(c.location, id)
+}
+
+// DiscCover returns the path of the cached cover of the disc id. The error
+// wraps fs.ErrNotExist when there is none.
+func (p *Player) DiscCover(id string) (string, error) {
+	if p.Cuer == nil {
+		return "", fmt.Errorf("no cue cache: %w", fs.ErrNotExist)
+	}
+	path := p.Cuer.CoverPath(id)
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("cover of %s: %w", id, err)
+	}
+	return path, nil
 }
 
 // insertDisc plays the disc just inserted in drive. The disc stays resolving

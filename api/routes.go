@@ -2,7 +2,12 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
@@ -52,6 +57,7 @@ type discResponse struct {
 	Date   *string  `json:"date"`
 	Genre  *string  `json:"genre"`
 	Tracks []string `json:"tracks"`
+	Cover  *string  `json:"cover"`
 }
 
 func (s *Server) registerPlayerRoutes(p Player) {
@@ -64,6 +70,22 @@ func (s *Server) registerPlayerRoutes(p Player) {
 				return
 			}
 			writeJSON(w, newStatusResponse(st.Playback, p.State()))
+		},
+	)
+	s.mux.HandleFunc(
+		"GET /discs/{id}/cover",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if !discIDPattern.MatchString(id) {
+				http.NotFound(w, r)
+				return
+			}
+			path, err := p.DiscCover(id)
+			if err != nil {
+				handleFileError(w, r, err)
+				return
+			}
+			serveForever(w, r, path)
 		},
 	)
 	s.mux.HandleFunc(
@@ -109,6 +131,36 @@ func (s *Server) registerPlayerRoutes(p Player) {
 			handleActionError(w, p.PlayURL(req.URL))
 		}),
 	)
+}
+
+// discIDPattern matches a FreeDB disc id, the name of a disc in the cache.
+var discIDPattern = regexp.MustCompile(`^[0-9a-f]{8}$`)
+
+// serveForever serves the file at path, cacheable forever: its URL changes
+// with its content.
+func serveForever(w http.ResponseWriter, r *http.Request, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		handleFileError(w, r, err)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		handleFileError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), f)
+}
+
+// handleFileError answers 404 for a missing file, 500 otherwise.
+func handleFileError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, fs.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 // handleActionError writes the HTTP response of a player action.
@@ -205,7 +257,22 @@ func newDiscResponse(disc *state.Disc) *discResponse {
 		Date:   nonZero(disc.Date),
 		Genre:  nonZero(disc.Genre),
 		Tracks: disc.Tracks,
+		Cover:  coverURL(disc),
 	}
+}
+
+// coverURL is the URL of the disc cover, relative to the API, nil without
+// one. The version changes with the cover file, so it can be cached forever.
+func coverURL(disc *state.Disc) *string {
+	if disc.ID == "" || disc.Cover == "" {
+		return nil
+	}
+	info, err := os.Stat(disc.Cover)
+	if err != nil {
+		return nil
+	}
+	url := fmt.Sprintf("discs/%s/cover?v=%d", disc.ID, info.ModTime().UnixMilli())
+	return &url
 }
 
 // nonZero points to v, nil when v is the zero value.

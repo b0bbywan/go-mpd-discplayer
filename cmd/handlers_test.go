@@ -88,6 +88,10 @@ func (c *fakeCuer) CuePath(id string) string {
 	return filepath.Join(c.cacheDir, id, "playlist.cue")
 }
 
+func (c *fakeCuer) CoverPath(id string) string {
+	return filepath.Join(c.cacheDir, id, "cover.jpg")
+}
+
 func (c *fakeCuer) Resolve(opts cue.Options) (*cue.Result, error) {
 	c.calls = append(c.calls, "Resolve "+opts.Device)
 	if c.onResolve != nil {

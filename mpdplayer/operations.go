@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,16 +59,35 @@ func (rc *ReconnectingMPDClient) Stop() error {
 	})
 }
 
-// StopAndRemove stops playback when the current song path starts with
-// prefix, then removes the songs under prefix from the queue.
-func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
+// DiscPrefixes are the path prefixes of the disc tracks: CDDA tracks, and
+// the tracks of the disc CUE sheets when MPD lists them in its library.
+func (rc *ReconnectingMPDClient) DiscPrefixes() []string {
+	return discPrefixes(rc.mpcConfig.CueFolder)
+}
+
+func discPrefixes(cueFolder string) []string {
+	if cueFolder == "" {
+		return []string{CDDAPathPrefix}
+	}
+	return []string{CDDAPathPrefix, cueFolder + "/"}
+}
+
+// StopIfPlaying stops playback when the current song path starts with one
+// of prefixes. The queue is left untouched.
+func (rc *ReconnectingMPDClient) StopIfPlaying(prefixes ...string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if checkPathPlaying(client, prefix) {
-			if err := client.Stop(); err != nil {
-				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
-			}
+		return stopIfPlaying(client, prefixes)
+	})
+}
+
+// StopAndRemove stops playback when the current song path starts with one of
+// prefixes, then removes the songs under them from the queue.
+func (rc *ReconnectingMPDClient) StopAndRemove(prefixes ...string) error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := stopIfPlaying(client, prefixes); err != nil {
+			return err
 		}
-		return deleteFromPlaylist(client, prefix)
+		return deleteFromPlaylist(client, prefixes)
 	})
 }
 
@@ -98,8 +118,41 @@ func (rc *ReconnectingMPDClient) UpdateDB(uri string) error {
 	})
 }
 
+// Mount is a USB storage mounted in MPD.
+type Mount struct {
+	Name    string // mount path in the MPD library
+	Storage string // udisks URI
+}
+
+// USBMounts lists the USB storages mounted in MPD. Other storages (nfs,
+// smb...) are left out.
+func (rc *ReconnectingMPDClient) USBMounts() ([]Mount, error) {
+	var usb []Mount
+	err := rc.execute(func(client *mpd.Client) error {
+		var err error
+		usb, err = usbMounts(client)
+		return err
+	})
+	return usb, err
+}
+
+// MountPrefix is the path prefix of the files of the mount named name, the
+// trailing slash keeping MYUSB from matching MYUSB2.
+func MountPrefix(name string) string {
+	return name + "/"
+}
+
+// Unmount unmounts label from MPD. A label already unmounted, by an eject
+// from the API for instance, is not an error.
 func (rc *ReconnectingMPDClient) Unmount(label string) error {
 	return rc.execute(func(client *mpd.Client) error {
+		mounts, err := listMounts(client)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(mounts, func(m mpd.Attrs) bool { return m["mount"] == label }) {
+			return nil
+		}
 		if err := unmount(client, label); err != nil {
 			return fmt.Errorf("failed to unmount %s: %w", label, err)
 		}
@@ -212,7 +265,17 @@ func addTracks(client *mpd.Client, trackCount int) error {
 	return nil
 }
 
-func checkPathPlaying(client *mpd.Client, checkPath string) bool {
+func stopIfPlaying(client *mpd.Client, prefixes []string) error {
+	if !checkPathPlaying(client, prefixes) {
+		return nil
+	}
+	if err := client.Stop(); err != nil {
+		return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+	}
+	return nil
+}
+
+func checkPathPlaying(client *mpd.Client, prefixes []string) bool {
 	song, err := client.CurrentSong()
 	if err != nil {
 		return true
@@ -223,12 +286,19 @@ func checkPathPlaying(client *mpd.Client, checkPath string) bool {
 		return true
 	}
 
-	return checkSongPath(song, checkPath)
+	return checkSongPath(song, prefixes)
 }
 
-func checkSongPath(song mpd.Attrs, checkPath string) bool {
-	if path, ok := song["file"]; ok {
-		return strings.HasPrefix(path, checkPath)
+func checkSongPath(song mpd.Attrs, prefixes []string) bool {
+	path, ok := song["file"]
+	return ok && hasAnyPrefix(path, prefixes)
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
 	}
 	return false
 }
@@ -249,7 +319,7 @@ func addUri(client *mpd.Client, uri string) error {
 	return nil
 }
 
-func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
+func deleteFromPlaylist(client *mpd.Client, prefixes []string) error {
 	playlist, err := client.PlaylistInfo(-1, -1)
 	if err != nil {
 		return fmt.Errorf("failed to fetch MPD playlist: %w", err)
@@ -258,7 +328,7 @@ func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
 	start := -1 // Initialize start index to -1 to indicate no active range
 
 	for i := len(playlist) - 1; i >= -1; i-- {
-		if i >= 0 && checkSongPath(playlist[i], checkPath) {
+		if i >= 0 && checkSongPath(playlist[i], prefixes) {
 			// Start a new range if not already started
 			if start == -1 {
 				start = i
@@ -337,6 +407,20 @@ func listMounts(client *mpd.Client) ([]mpd.Attrs, error) {
 		return nil, fmt.Errorf("failed to list MPD mounts: %w", err)
 	}
 	return res, nil
+}
+
+func usbMounts(client *mpd.Client) ([]Mount, error) {
+	mounts, err := listMounts(client)
+	if err != nil {
+		return nil, err
+	}
+	var usb []Mount
+	for _, m := range mounts {
+		if m["mount"] != "" && strings.HasPrefix(m["storage"], udisksScheme) {
+			usb = append(usb, Mount{Name: m["mount"], Storage: m["storage"]})
+		}
+	}
+	return usb, nil
 }
 
 // isMounted reports whether label is already mounted on a storage matching

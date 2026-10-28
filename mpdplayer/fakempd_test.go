@@ -28,6 +28,9 @@ type fakeMPD struct {
 	commands  []string
 	// updating is the number of status calls that still report a database update
 	updating int
+	// tags, elapsed and duration describe the current song
+	tags              map[string]string
+	elapsed, duration string
 }
 
 func newFakeMPD() *fakeMPD {
@@ -52,7 +55,7 @@ func (f *fakeMPD) start(t *testing.T) *ReconnectingMPDClient {
 		}
 	}()
 
-	conn, err := NewMPDConnection("tcp", ln.Addr().String(), time.Second)
+	conn, err := NewMPDConnection("tcp", ln.Addr().String(), time.Second, ".disc-cuer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +103,12 @@ func (f *fakeMPD) handle(line string) string {
 		if f.current < 0 {
 			return "OK\n"
 		}
-		return fmt.Sprintf("file: %s\nPos: %d\nOK\n", f.queue[f.current], f.current)
+		var b strings.Builder
+		fmt.Fprintf(&b, "file: %s\nPos: %d\n", f.queue[f.current], f.current)
+		for k, v := range f.tags {
+			fmt.Fprintf(&b, "%s: %s\n", k, v)
+		}
+		return b.String() + "OK\n"
 	case "playlistinfo":
 		var b strings.Builder
 		for i, file := range f.queue {
@@ -118,7 +126,18 @@ func (f *fakeMPD) handle(line string) string {
 			f.updating--
 			return fmt.Sprintf("playlistlength: %d\nupdating_db: 1\nOK\n", len(f.queue))
 		}
-		return fmt.Sprintf("playlistlength: %d\nOK\n", len(f.queue))
+		if f.current < 0 {
+			return fmt.Sprintf("state: stop\nplaylistlength: %d\nOK\n", len(f.queue))
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "state: play\nplaylistlength: %d\nsong: %d\n", len(f.queue), f.current)
+		if f.elapsed != "" {
+			fmt.Fprintf(&b, "elapsed: %s\n", f.elapsed)
+		}
+		if f.duration != "" {
+			fmt.Fprintf(&b, "duration: %s\n", f.duration)
+		}
+		return b.String() + "OK\n"
 	case "update":
 		return "updating_db: 1\nOK\n"
 	case "listmounts":

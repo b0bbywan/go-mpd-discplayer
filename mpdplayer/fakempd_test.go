@@ -55,7 +55,7 @@ func (f *fakeMPD) start(t *testing.T) *ReconnectingMPDClient {
 		}
 	}()
 
-	conn, err := NewMPDConnection("tcp", ln.Addr().String(), time.Second)
+	conn, err := NewMPDConnection("tcp", ln.Addr().String(), time.Second, ".disc-cuer")
 	if err != nil {
 		t.Fatal(err)
 	}

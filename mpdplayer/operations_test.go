@@ -96,6 +96,29 @@ func TestStopAndRemove(t *testing.T) {
 	}
 }
 
+func TestDiscPrefixes(t *testing.T) {
+	if got, want := discPrefixes(".disc-cuer"), []string{"cdda://", ".disc-cuer/"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("discPrefixes(.disc-cuer) = %q, want %q", got, want)
+	}
+	// A CUE cache out of the MPD library has no track in it
+	if got, want := discPrefixes(""), []string{"cdda://"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("discPrefixes() = %q, want %q", got, want)
+	}
+}
+
+func TestStopAndRemoveDiscTracks(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{".disc-cuer/6507c409/playlist.cue/track0001", "usb/a.flac", "cdda:///2"}
+	f.current = 0
+	client := f.start(t)
+
+	if err := client.StopAndRemove(client.DiscPrefixes()...); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "currentsong", "stop", "playlistinfo", "delete 2:3", "delete 0:1")
+	assertQueue(t, f, "usb/a.flac")
+}
+
 func TestStopIfPlaying(t *testing.T) {
 	queue := []string{"usb/a.flac", "cdda:///1", "cdda:///2", "usb2/b.flac"}
 	tests := []struct {

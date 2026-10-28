@@ -36,7 +36,7 @@ func TestExecuteMarksUnreachableMPD(t *testing.T) {
 	addr := ln.Addr().String()
 	_ = ln.Close()
 
-	conn, err := NewMPDConnection("tcp", addr, 100*time.Millisecond)
+	conn, err := NewMPDConnection("tcp", addr, 100*time.Millisecond, ".disc-cuer")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,13 +55,13 @@ func (rc *ReconnectingMPDClient) Status() (Status, error) {
 		if err != nil {
 			return err
 		}
-		st = Status{Playback: newPlayback(status, song, mounts), Mounts: mounts}
+		st = Status{Playback: newPlayback(status, song, rc.DiscPrefixes(), mounts), Mounts: mounts}
 		return nil
 	})
 	return st, err
 }
 
-func newPlayback(status, song mpd.Attrs, mounts []Mount) Playback {
+func newPlayback(status, song mpd.Attrs, discPrefixes []string, mounts []Mount) Playback {
 	file := song["file"]
 	pb := Playback{
 		State:    status["state"],
@@ -76,7 +76,7 @@ func newPlayback(status, song mpd.Attrs, mounts []Mount) Playback {
 	if pos, ok := status["song"]; ok && file != "" {
 		pb.Position = atoi(pos) + 1
 	}
-	pb.Source, pb.Mount = songSource(file, mounts)
+	pb.Source, pb.Mount = songSource(file, discPrefixes, mounts)
 	if pb.Source == SourceStream {
 		pb.URL = file
 	}
@@ -85,11 +85,11 @@ func newPlayback(status, song mpd.Attrs, mounts []Mount) Playback {
 
 // songSource tells where file comes from: a disc, a USB storage (along with
 // its name), a stream or the MPD library.
-func songSource(file string, mounts []Mount) (source, mount string) {
+func songSource(file string, discPrefixes []string, mounts []Mount) (source, mount string) {
 	switch {
 	case file == "":
 		return "", ""
-	case strings.HasPrefix(file, CDDAPathPrefix):
+	case hasAnyPrefix(file, discPrefixes):
 		return SourceDisc, ""
 	case strings.Contains(file, "://"):
 		return SourceStream, ""

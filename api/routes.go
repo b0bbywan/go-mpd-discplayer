@@ -2,10 +2,16 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 type mountResponse struct {
@@ -15,11 +21,16 @@ type mountResponse struct {
 
 type statusResponse struct {
 	Playback playbackResponse `json:"playback"`
+	Disc     *discResponse    `json:"disc"`
 	Mounts   []mountResponse  `json:"mounts"`
 }
 
+// atLayout is RFC 3339 with milliseconds, precise enough to move elapsed on.
+const atLayout = "2006-01-02T15:04:05.000Z07:00"
+
 // playbackResponse is the playback state, null standing for what is missing.
 type playbackResponse struct {
+	At       string   `json:"at"`
 	State    string   `json:"state"`
 	Source   *string  `json:"source"`
 	Mount    *string  `json:"mount"`
@@ -34,10 +45,48 @@ type playbackResponse struct {
 	Duration *float64 `json:"duration"`
 }
 
+// discResponse is the disc in the drive, null standing for what is not known:
+// everything but the device while it is resolving, the metadata of a disc
+// unknown to the metadata sources.
+type discResponse struct {
+	ID     *string  `json:"id"`
+	Device string   `json:"device"`
+	Status string   `json:"status"`
+	Album  *string  `json:"album"`
+	Artist *string  `json:"artist"`
+	Date   *string  `json:"date"`
+	Genre  *string  `json:"genre"`
+	Tracks []string `json:"tracks"`
+	Cover  *string  `json:"cover"`
+}
+
 func (s *Server) registerPlayerRoutes(p Player) {
 	s.mux.HandleFunc(
 		"GET /player/status",
-		withJSON(p.Status, newStatusResponse),
+		func(w http.ResponseWriter, r *http.Request) {
+			st, err := p.Status()
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, newStatusResponse(st.Playback, p.State()))
+		},
+	)
+	s.mux.HandleFunc(
+		"GET /discs/{id}/cover",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if !discIDPattern.MatchString(id) {
+				http.NotFound(w, r)
+				return
+			}
+			path, err := p.DiscCover(id)
+			if err != nil {
+				handleFileError(w, r, err)
+				return
+			}
+			serveForever(w, r, path)
+		},
 	)
 	s.mux.HandleFunc(
 		"POST /player/stop",
@@ -59,7 +108,9 @@ func (s *Server) registerPlayerRoutes(p Player) {
 
 	s.mux.HandleFunc(
 		"GET /player/mounts",
-		withJSON(p.Mounts, newMountsResponse),
+		func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, newMountsResponse(p.State().Mounts))
+		},
 	)
 	s.mux.HandleFunc(
 		"POST /player/mounts/{name}/play",
@@ -80,6 +131,36 @@ func (s *Server) registerPlayerRoutes(p Player) {
 			handleActionError(w, p.PlayURL(req.URL))
 		}),
 	)
+}
+
+// discIDPattern matches a FreeDB disc id, the name of a disc in the cache.
+var discIDPattern = regexp.MustCompile(`^[0-9a-f]{8}$`)
+
+// serveForever serves the file at path, cacheable forever: its URL changes
+// with its content.
+func serveForever(w http.ResponseWriter, r *http.Request, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		handleFileError(w, r, err)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		handleFileError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), f)
+}
+
+// handleFileError answers 404 for a missing file, 500 otherwise.
+func handleFileError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, fs.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 // handleActionError writes the HTTP response of a player action.
@@ -118,19 +199,6 @@ func withAction(fn func() error) http.HandlerFunc {
 	}
 }
 
-// withJSON wraps a player read into an http.HandlerFunc writing its result,
-// turned into a response by toResponse, as JSON.
-func withJSON[T, R any](fn func() (T, error), toResponse func(T) R) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		v, err := fn()
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, toResponse(v))
-	}
-}
-
 // newMountsResponse lists the mounts, as an empty list rather than null when
 // there is none.
 func newMountsResponse(mounts []mpdplayer.Mount) []mountResponse {
@@ -148,9 +216,19 @@ func withMount(fn func(name string) error) http.HandlerFunc {
 	}
 }
 
-func newStatusResponse(st mpdplayer.Status) statusResponse {
-	pb := st.Playback
-	res := playbackResponse{
+// newStatusResponse is the status object: the playback read from MPD, the
+// disc and the mounts from the player state.
+func newStatusResponse(pb mpdplayer.Playback, st state.State) statusResponse {
+	return statusResponse{
+		Playback: newPlaybackResponse(pb),
+		Disc:     newDiscResponse(st.Disc),
+		Mounts:   newMountsResponse(st.Mounts),
+	}
+}
+
+func newPlaybackResponse(pb mpdplayer.Playback) playbackResponse {
+	return playbackResponse{
+		At:       pb.At.UTC().Format(atLayout),
 		State:    pb.State,
 		Source:   nonZero(pb.Source),
 		Mount:    nonZero(pb.Mount),
@@ -164,7 +242,37 @@ func newStatusResponse(st mpdplayer.Status) statusResponse {
 		Elapsed:  pb.Elapsed,
 		Duration: pb.Duration,
 	}
-	return statusResponse{Playback: res, Mounts: newMountsResponse(st.Mounts)}
+}
+
+func newDiscResponse(disc *state.Disc) *discResponse {
+	if disc == nil {
+		return nil
+	}
+	return &discResponse{
+		ID:     nonZero(disc.ID),
+		Device: disc.Device,
+		Status: string(disc.Status),
+		Album:  nonZero(disc.Album),
+		Artist: nonZero(disc.Artist),
+		Date:   nonZero(disc.Date),
+		Genre:  nonZero(disc.Genre),
+		Tracks: disc.Tracks,
+		Cover:  coverURL(disc),
+	}
+}
+
+// coverURL is the URL of the disc cover, relative to the API, nil without
+// one. The version changes with the cover file, so it can be cached forever.
+func coverURL(disc *state.Disc) *string {
+	if disc.ID == "" || disc.Cover == "" {
+		return nil
+	}
+	info, err := os.Stat(disc.Cover)
+	if err != nil {
+		return nil
+	}
+	url := fmt.Sprintf("discs/%s/cover?v=%d", disc.ID, info.ModTime().UnixMilli())
+	return &url
 }
 
 // nonZero points to v, nil when v is the zero value.

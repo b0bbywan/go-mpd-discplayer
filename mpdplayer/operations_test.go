@@ -1,6 +1,7 @@
 package mpdplayer
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -35,6 +36,42 @@ func TestStartPlayback(t *testing.T) {
 	}
 	assertCommands(t, f, "clear", "add http://radio.example/stream", "play")
 	assertQueue(t, f, "http://radio.example/stream")
+}
+
+func TestStartDiscPlayback(t *testing.T) {
+	f := newFakeMPD()
+	f.playlists = map[string][]string{"/cache/disc/playlist.cue": {"cdda:///1", "cdda:///2"}}
+	f.queue = []string{"old/track.flac"}
+	client := f.start(t)
+
+	if err := client.StartDiscPlayback("/dev/sr0", "/cache/disc/playlist.cue"); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "clear", "load /cache/disc/playlist.cue", "play")
+	assertQueue(t, f, "cdda:///1", "cdda:///2")
+}
+
+func TestStartDiscPlaybackFallsBackToDrive(t *testing.T) {
+	tests := []struct {
+		name    string
+		cuePath string
+		want    []string
+	}{
+		{"no cue", "", []string{"clear"}},
+		{"cue failing to load", "/cache/missing.cue", []string{"clear", "load /cache/missing.cue"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMPD()
+			client := f.start(t)
+
+			// The fallback reads the drive, which is not one here
+			if err := client.StartDiscPlayback(filepath.Join(t.TempDir(), "sr0"), tt.cuePath); err == nil {
+				t.Fatal("expected error reading the tracks of a missing drive")
+			}
+			assertCommands(t, f, tt.want...)
+		})
+	}
 }
 
 func TestStartUSBPlayback(t *testing.T) {

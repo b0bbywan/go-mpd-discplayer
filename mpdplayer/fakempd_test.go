@@ -26,6 +26,12 @@ type fakeMPD struct {
 	mounts    []fakeMount
 	neighbors []string
 	commands  []string
+	// playlists maps a playlist path to its songs, for load
+	playlists map[string][]string
+	// lastLoaded is the last playlist loaded, cleared by clear as MPD does
+	lastLoaded string
+	// songTags maps a song file to its tags, for playlistinfo
+	songTags map[string]map[string]string
 	// updating is the number of status calls that still report a database update
 	updating int
 	// tags, elapsed and duration describe the current song
@@ -90,9 +96,16 @@ func (f *fakeMPD) handle(line string) string {
 	name, args := parseCommand(line)
 	switch name {
 	case "clear":
-		f.queue, f.current = nil, -1
+		f.queue, f.current, f.lastLoaded = nil, -1, ""
 	case "add":
 		f.queue = append(f.queue, args[0])
+	case "load":
+		songs, ok := f.playlists[args[0]]
+		if !ok {
+			return "ACK [50@0] {load} No such playlist\n"
+		}
+		f.queue = append(f.queue, songs...)
+		f.lastLoaded = args[0]
 	case "play":
 		if len(f.queue) > 0 {
 			f.current = 0
@@ -112,7 +125,11 @@ func (f *fakeMPD) handle(line string) string {
 	case "playlistinfo":
 		var b strings.Builder
 		for i, file := range f.queue {
-			fmt.Fprintf(&b, "file: %s\nPos: %d\n", file, i)
+			fmt.Fprintf(&b, "file: %s\n", file)
+			for k, v := range f.songTags[file] {
+				fmt.Fprintf(&b, "%s: %s\n", k, v)
+			}
+			fmt.Fprintf(&b, "Pos: %d\n", i)
 		}
 		return b.String() + "OK\n"
 	case "delete":
@@ -126,10 +143,14 @@ func (f *fakeMPD) handle(line string) string {
 			f.updating--
 			return fmt.Sprintf("playlistlength: %d\nupdating_db: 1\nOK\n", len(f.queue))
 		}
-		if f.current < 0 {
-			return fmt.Sprintf("state: stop\nplaylistlength: %d\nOK\n", len(f.queue))
-		}
 		var b strings.Builder
+		if f.lastLoaded != "" {
+			fmt.Fprintf(&b, "lastloadedplaylist: %s\n", f.lastLoaded)
+		}
+		if f.current < 0 {
+			fmt.Fprintf(&b, "state: stop\nplaylistlength: %d\n", len(f.queue))
+			return b.String() + "OK\n"
+		}
 		fmt.Fprintf(&b, "state: play\nplaylistlength: %d\nsong: %d\n", len(f.queue), f.current)
 		if f.elapsed != "" {
 			fmt.Fprintf(&b, "elapsed: %s\n", f.elapsed)

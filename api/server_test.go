@@ -4,24 +4,36 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 type fakePlayer struct {
 	calls  []string
 	err    error
+	disc   *state.Disc
 	mounts []mpdplayer.Mount
 	status mpdplayer.Status
+	// coverPath and coverErr are what DiscCover returns
+	coverPath string
+	coverErr  error
+}
+
+func (f *fakePlayer) DiscCover(id string) (string, error) {
+	f.calls = append(f.calls, "disc_cover "+id)
+	return f.coverPath, f.coverErr
 }
 
 func (f *fakePlayer) Status() (mpdplayer.Status, error) {
@@ -29,9 +41,9 @@ func (f *fakePlayer) Status() (mpdplayer.Status, error) {
 	return f.status, f.err
 }
 
-func (f *fakePlayer) Mounts() ([]mpdplayer.Mount, error) {
-	f.calls = append(f.calls, "mounts")
-	return f.mounts, f.err
+func (f *fakePlayer) State() state.State {
+	f.calls = append(f.calls, "state")
+	return state.State{Disc: f.disc, Mounts: f.mounts}
 }
 
 func (f *fakePlayer) PlayMount(name string) error {
@@ -221,57 +233,59 @@ func TestMounts(t *testing.T) {
 	}
 }
 
-func TestMountsError(t *testing.T) {
-	tests := []struct {
-		err  error
-		want int
-	}{
-		{fmt.Errorf("error listing mounts: %w", mpdplayer.ErrMPD), http.StatusBadGateway},
-		{errors.New("other failure"), http.StatusInternalServerError},
-	}
-	for _, tt := range tests {
-		if rec := serve(t, &fakePlayer{err: tt.err}, http.MethodGet, "/player/mounts", nil); rec.Code != tt.want {
-			t.Errorf("%v: status = %d, want %d", tt.err, rec.Code, tt.want)
-		}
-	}
-}
-
 func ptr(f float64) *float64 { return &f }
 
 func TestStatus(t *testing.T) {
 	usb := []mpdplayer.Mount{{Name: "MUSIC", Storage: "udisks://by-uuid-3A4F-1C2B"}}
+	at := time.Date(2026, 10, 24, 17, 46, 2, 345e6, time.UTC)
+	const atJSON = `"at":"2026-10-24T17:46:02.345Z"`
+	stopped := mpdplayer.Playback{At: at, State: "stop"}
+	const stoppedJSON = `{` + atJSON + `,"state":"stop","source":null,"mount":null,"title":null,"artist":null,` +
+		`"album":null,"name":null,"url":null,"position":null,"length":0,"elapsed":null,"duration":null}`
 	tests := []struct {
-		name   string
-		status mpdplayer.Status
-		want   string
+		name     string
+		playback mpdplayer.Playback
+		disc     *state.Disc
+		mounts   []mpdplayer.Mount
+		want     string
 	}{
-		{"disc", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
-			State: "play", Source: mpdplayer.SourceDisc,
+		{"disc", mpdplayer.Playback{
+			At: at, State: "play", Source: mpdplayer.SourceDisc,
 			Title: "Bruxelles", Artist: "Benabar", Album: "Reprise des negociations",
 			Position: 4, Length: 12, Elapsed: ptr(102.3), Duration: ptr(224),
-		}}, `{"playback":{"state":"play","source":"disc","mount":null,"title":"Bruxelles","artist":"Benabar",` +
+		}, &state.Disc{
+			ID: "9c0bf40c", Device: "/dev/sr0", Status: state.Ready,
+			Album: "Reprise des negociations", Artist: "Benabar", Date: "2005", Genre: "Chanson",
+			Tracks: []string{"Le diner", "Bruxelles"}, Cover: "/cache/9c0bf40c/cover.jpg",
+		}, usb, `{"playback":{` + atJSON + `,"state":"play","source":"disc","mount":null,"title":"Bruxelles","artist":"Benabar",` +
 			`"album":"Reprise des negociations","name":null,"url":null,"position":4,"length":12,"elapsed":102.3,"duration":224},` +
+			`"disc":{"id":"9c0bf40c","device":"/dev/sr0","status":"ready","album":"Reprise des negociations","artist":"Benabar",` +
+			`"date":"2005","genre":"Chanson","tracks":["Le diner","Bruxelles"],"cover":null},` +
 			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
-		{"mount", mpdplayer.Status{Mounts: usb, Playback: mpdplayer.Playback{
-			State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
+		{"mount", mpdplayer.Playback{
+			At: at.In(time.FixedZone("CET", 3600)), State: "pause", Source: mpdplayer.SourceMount, Mount: "MUSIC",
 			Position: 1, Length: 1, Elapsed: ptr(0), Duration: ptr(60),
-		}}, `{"playback":{"state":"pause","source":"mount","mount":"MUSIC","title":null,"artist":null,` +
+		}, nil, usb, `{"playback":{` + atJSON + `,"state":"pause","source":"mount","mount":"MUSIC","title":null,"artist":null,` +
 			`"album":null,"name":null,"url":null,"position":1,"length":1,"elapsed":0,"duration":60},` +
-			`"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
-		{"stream", mpdplayer.Status{Playback: mpdplayer.Playback{
-			State: "play", Source: mpdplayer.SourceStream, URL: "https://radio.example/live",
+			`"disc":null,"mounts":[{"name":"MUSIC","storage":"udisks://by-uuid-3A4F-1C2B"}]}`},
+		{"stream", mpdplayer.Playback{
+			At: at, State: "play", Source: mpdplayer.SourceStream, URL: "https://radio.example/live",
 			Title: "Live", Name: "Radio", Position: 1, Length: 1, Elapsed: ptr(12),
-		}}, `{"playback":{"state":"play","source":"stream","mount":null,"title":"Live","artist":null,` +
+		}, nil, nil, `{"playback":{` + atJSON + `,"state":"play","source":"stream","mount":null,"title":"Live","artist":null,` +
 			`"album":null,"name":"Radio","url":"https://radio.example/live","position":1,"length":1,"elapsed":12,"duration":null},` +
-			`"mounts":[]}`},
-		{"stopped", mpdplayer.Status{Playback: mpdplayer.Playback{State: "stop"}},
-			`{"playback":{"state":"stop","source":null,"mount":null,"title":null,"artist":null,` +
-				`"album":null,"name":null,"url":null,"position":null,"length":0,"elapsed":null,"duration":null},` +
-				`"mounts":[]}`},
+			`"disc":null,"mounts":[]}`},
+		{"stopped", stopped, nil, nil, `{"playback":` + stoppedJSON + `,"disc":null,"mounts":[]}`},
+		{"disc resolving", stopped, &state.Disc{Device: "/dev/sr0", Status: state.Resolving}, nil,
+			`{"playback":` + stoppedJSON + `,"disc":{"id":null,"device":"/dev/sr0","status":"resolving",` +
+				`"album":null,"artist":null,"date":null,"genre":null,"tracks":null,"cover":null},"mounts":[]}`},
+		{"unknown disc", stopped, &state.Disc{Device: "/dev/sr0", Status: state.Ready, Tracks: []string{"", ""}}, nil,
+			`{"playback":` + stoppedJSON + `,"disc":{"id":null,"device":"/dev/sr0","status":"ready",` +
+				`"album":null,"artist":null,"date":null,"genre":null,"tracks":["",""],"cover":null},"mounts":[]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := serve(t, &fakePlayer{status: tt.status}, http.MethodGet, "/player/status", nil)
+			player := &fakePlayer{status: mpdplayer.Status{Playback: tt.playback}, disc: tt.disc, mounts: tt.mounts}
+			rec := serve(t, player, http.MethodGet, "/player/status", nil)
 			if rec.Code != http.StatusOK {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 			}
@@ -280,6 +294,88 @@ func TestStatus(t *testing.T) {
 			}
 			if got := rec.Body.String(); got != tt.want+"\n" {
 				t.Errorf("body = %s\nwant   %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStatusCoverURL(t *testing.T) {
+	cover := filepath.Join(t.TempDir(), "cover.jpg")
+	if err := os.WriteFile(cover, []byte("jpeg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	modTime := time.Date(2026, 10, 24, 17, 46, 2, 345e6, time.UTC)
+	if err := os.Chtimes(cover, modTime, modTime); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		disc *state.Disc
+		want string
+	}{
+		{"cover", &state.Disc{ID: "9c0bf40c", Cover: cover}, fmt.Sprintf(`"cover":"discs/9c0bf40c/cover?v=%d"`, modTime.UnixMilli())},
+		{"no cover", &state.Disc{ID: "9c0bf40c"}, `"cover":null`},
+		{"cover file gone", &state.Disc{ID: "9c0bf40c", Cover: cover + ".gone"}, `"cover":null`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(t, &fakePlayer{disc: tt.disc}, http.MethodGet, "/player/status", nil)
+			if got := rec.Body.String(); !strings.Contains(got, tt.want) {
+				t.Errorf("body = %s, want it to hold %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDiscCover(t *testing.T) {
+	cover := filepath.Join(t.TempDir(), "cover.jpg")
+	if err := os.WriteFile(cover, []byte("jpeg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	player := &fakePlayer{coverPath: cover}
+	rec := serve(t, player, http.MethodGet, "/discs/9c0bf40c/cover?v=1", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); got != "jpeg" {
+		t.Errorf("body = %q, want the cover", got)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Errorf("Content-Type = %q, want image/jpeg", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Errorf("Cache-Control = %q", got)
+	}
+	if want := []string{"disc_cover 9c0bf40c"}; !reflect.DeepEqual(player.calls, want) {
+		t.Errorf("calls = %v, want %v", player.calls, want)
+	}
+}
+
+func TestDiscCoverErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		player   *fakePlayer
+		want     int
+		wantCall bool
+	}{
+		{"no cover", "/discs/9c0bf40c/cover", &fakePlayer{coverErr: fs.ErrNotExist}, http.StatusNotFound, true},
+		{"cover file gone", "/discs/9c0bf40c/cover", &fakePlayer{coverPath: "/nonexistent/cover.jpg"}, http.StatusNotFound, true},
+		{"cache unreadable", "/discs/9c0bf40c/cover", &fakePlayer{coverErr: fs.ErrPermission}, http.StatusInternalServerError, true},
+		// Only a disc id reaches the player
+		{"too short", "/discs/9c0bf40/cover", &fakePlayer{}, http.StatusNotFound, false},
+		{"not hexadecimal", "/discs/9c0bf40g/cover", &fakePlayer{}, http.StatusNotFound, false},
+		{"upper case", "/discs/9C0BF40C/cover", &fakePlayer{}, http.StatusNotFound, false},
+		{"escaped path", "/discs/..%2F..%2Fetc/cover", &fakePlayer{}, http.StatusNotFound, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(t, tt.player, http.MethodGet, tt.path, nil)
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if called := len(tt.player.calls) > 0; called != tt.wantCall {
+				t.Errorf("calls = %v, want a call: %v", tt.player.calls, tt.wantCall)
 			}
 		})
 	}

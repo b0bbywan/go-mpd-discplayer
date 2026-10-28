@@ -54,8 +54,8 @@ func (d *UdevDetector) Run(ctx context.Context, out chan<- DeviceEvent) error {
 	}
 }
 
-// coldplug emits a DevicePresent event for USB devices already plugged in.
-// Discs are skipped so a CD left in the drive does not autoplay at boot.
+// coldplug emits a DevicePresent event for the USB devices and the audio
+// discs already there. Handlers do not start playback on it.
 func (d *UdevDetector) coldplug(ctx context.Context, out chan<- DeviceEvent) {
 	devices, err := blockdev.List()
 	if err != nil {
@@ -63,19 +63,29 @@ func (d *UdevDetector) coldplug(ctx context.Context, out chan<- DeviceEvent) {
 		return
 	}
 	for _, dev := range devices {
-		if !usbPreChecker(dev) {
+		device := presentDevice(dev)
+		if device == nil {
 			continue
 		}
 		log.Printf("coldplug: found %s", dev.Devnode())
 		select {
 		case <-ctx.Done():
 			return
-		case out <- DeviceEvent{
-			Type:   DevicePresent,
-			Device: &USBDevice{path: dev.Devnode(), udev: dev},
-		}:
+		case out <- DeviceEvent{Type: DevicePresent, Device: device}:
 		}
 	}
+}
+
+// presentDevice returns dev when it is a USB device or a drive holding an
+// audio disc, nil otherwise.
+func presentDevice(dev *udev.Device) Device {
+	switch {
+	case usbPreChecker(dev):
+		return &USBDevice{path: dev.Devnode(), udev: dev}
+	case discPreChecker(dev) && hasAudioTracks(dev):
+		return &DiscDevice{path: dev.Devnode(), udev: dev}
+	}
+	return nil
 }
 
 func (d *UdevDetector) convert(dev *udev.Device) *DeviceEvent {

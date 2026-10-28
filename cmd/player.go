@@ -15,11 +15,14 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/b0bbywan/go-disc-cuer/config"
+	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-disc-cuer/types"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/mounts"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 	"github.com/b0bbywan/go-mpd-discplayer/notifications"
+	"github.com/b0bbywan/go-mpd-discplayer/state"
 )
 
 const (
@@ -31,7 +34,7 @@ var AppVersion = "dev"
 
 // playerClient is the part of the MPD client the player drives.
 type playerClient interface {
-	StartDiscPlayback(device string) error
+	StartDiscPlayback(device, cuePath string) error
 	StartUSBPlayback(label string) error
 	StartPlayback(uri string) error
 	Stop() error
@@ -40,9 +43,22 @@ type playerClient interface {
 	DiscPrefixes() []string
 	USBMounts() ([]mpdplayer.Mount, error)
 	Status() (mpdplayer.Status, error)
+	QueuedDisc() (mpdplayer.QueuedDisc, error)
 	Unmount(label string) error
 	UpdateDB(uri string) error
 	Disconnect()
+}
+
+// cueResolver writes the CUE sheet of a disc and reads its metadata.
+type cueResolver interface {
+	Resolve(opts cue.Options) (*cue.Result, error)
+	// Cached reads the metadata of the cached sheet of the disc id, without
+	// reading the drive.
+	Cached(id string) (*types.DiscInfo, error)
+	// CuePath and CoverPath are the paths of the cached sheet and cover of
+	// the disc id.
+	CuePath(id string) string
+	CoverPath(id string) string
 }
 
 // deviceMounter exposes USB devices to MPD.
@@ -57,6 +73,9 @@ type Player struct {
 	wg        *sync.WaitGroup
 	discSpeed int
 	Client    playerClient
+	Cuer      cueResolver // nil when the cuer config is invalid, discs then play without metadata
+	store     state.Store
+	discFile  state.DiscFile // "" without a runtime directory, a restart then reads the TOC again
 	Notifier  *notifications.Notifier
 	Mounter   deviceMounter
 	scheduler *scheduler
@@ -116,11 +135,17 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 		viper.GetString("MPDLibraryFolder"),
 		viper.GetString("MPDCueSubfolder"),
 	)
-	cuerConfig, err := config.NewConfig(AppName, AppVersion, cuerCacheLocation)
-	if err != nil {
+	var cuer cueResolver
+	if cuerConfig, err := config.NewConfig(AppName, AppVersion, cuerCacheLocation); err != nil {
 		log.Printf("Failed to create Cuer Config: %v", err)
+	} else {
+		cuer = cueCache{Generator: cue.New(cuerConfig), location: cuerConfig.GetCacheLocation()}
 	}
-	mpdClient.SetCuerConfig(cuerConfig)
+
+	discFile, err := state.RuntimeDiscFile(AppName)
+	if err != nil {
+		log.Printf("warning: the disc is not kept across restarts: %v", err)
+	}
 
 	mountConfig := mounts.NewMountConfig(
 		viper.GetString("MPDLibraryFolder"),
@@ -148,6 +173,8 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 		wg:        &wg,
 		discSpeed: viper.GetInt("DiscSpeed"),
 		Client:    mpdClient,
+		Cuer:      cuer,
+		discFile:  discFile,
 		Notifier:  notifier,
 		Mounter:   mounter,
 		scheduler: scheduler,
@@ -159,6 +186,8 @@ func (p *Player) Start() {
 
 	p.newDiscHandler()
 	p.newUSBHandler()
+	// MPD may have kept mounts from a previous run
+	p.refreshMounts()
 
 	detector := detect.NewUdevDetector()
 	events := make(chan detect.DeviceEvent)
@@ -242,13 +271,8 @@ func (p *Player) PlayDisc(drive string) error {
 			return err
 		}
 	}
-	if err := hwcontrol.SetDiscSpeed(drive, p.discSpeed); err != nil {
-		log.Printf("warning: failed to set disc speed on %s: %v", drive, err)
-	}
-	if err := p.Client.StartDiscPlayback(drive); err != nil {
-		return fmt.Errorf("error adding tracks: %w", err)
-	}
-	return nil
+	p.setDiscSpeed(drive)
+	return p.startDisc(drive, p.resolveDisc(drive))
 }
 
 // PlayURL replaces the queue with url, a webradio for instance, and starts playback.
@@ -275,8 +299,28 @@ func (p *Player) StopDisc() error {
 	return nil
 }
 
-// Mounts lists the USB storages mounted in MPD. The list is empty with the
-// symlink mount method, where MPD mounts nothing.
+// State returns what the player knows about its media. It is filled only
+// once the player is started; the CLI reads MPD instead.
+func (p *Player) State() state.State {
+	return p.store.Load()
+}
+
+// refreshMounts copies the USB storages mounted in MPD into the state. On
+// error the state keeps the previous list.
+func (p *Player) refreshMounts() {
+	mounts, err := p.Client.USBMounts()
+	if err != nil {
+		log.Printf("warning: failed to refresh the mounts: %v", err)
+		return
+	}
+	p.store.Update(func(st state.State) state.State {
+		st.Mounts = mounts
+		return st
+	})
+}
+
+// Mounts lists the USB storages mounted in MPD, asking MPD. The list is empty
+// with the symlink mount method, where MPD mounts nothing.
 func (p *Player) Mounts() ([]mpdplayer.Mount, error) {
 	mounts, err := p.Client.USBMounts()
 	if err != nil {
@@ -328,7 +372,9 @@ func (p *Player) EjectMount(name string) error {
 	if err := p.Client.StopAndRemove(mpdplayer.MountPrefix(name)); err != nil {
 		log.Printf("warning: failed to stop %s playback before unmount: %v", name, err)
 	}
-	if err := p.Client.Unmount(name); err != nil {
+	err := p.Client.Unmount(name)
+	p.refreshMounts()
+	if err != nil {
 		return fmt.Errorf("error unmounting %s: %w", name, err)
 	}
 	return nil

@@ -34,13 +34,13 @@ func skipWithoutSysfs(t *testing.T) {
 	}
 }
 
-func TestColdplugOnlyEmitsUSB(t *testing.T) {
+func TestColdplugOnlyEmitsPresentDevices(t *testing.T) {
 	skipWithoutSysfs(t)
 	out := make(chan DeviceEvent, 64)
 	(&UdevDetector{}).coldplug(context.Background(), out)
 	close(out)
 	for ev := range out {
-		if ev.Type != DevicePresent || ev.Device.Kind() != DeviceUSB {
+		if ev.Type != DevicePresent || (ev.Device.Kind() != DeviceUSB && ev.Device.Kind() != DeviceDisc) {
 			t.Errorf("unexpected event %s %s for %s", ev.Type, ev.Device.Kind(), ev.Device.Path())
 		}
 	}

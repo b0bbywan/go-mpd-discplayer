@@ -1,5 +1,5 @@
-github.com/b0bbywan/go-disc-cuer v0.4.0 h1:dw5OcaW0CjhE9Xk7aIoAA/Gk3pyjxHesILx+Qnicz6M=
-github.com/b0bbywan/go-disc-cuer v0.4.0/go.mod h1:f1QJPvLWDPm1TBy5OubKRAmLHFVyKK7ucuexb6EY39w=
+github.com/b0bbywan/go-disc-cuer v0.4.1-0.20261027174037-b3850fdba27f h1:R1yZvEXP4Er2cXbmaVPhx6fUuz8nx/f/tXyqk6DNpwg=
+github.com/b0bbywan/go-disc-cuer v0.4.1-0.20261027174037-b3850fdba27f/go.mod h1:owbDcRQYRzS52DV81y9JpKqBQzSn+KAOsQu8zLn4K9U=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/ebitengine/oto/v3 v3.5.1 h1:7gL5DxxSQp8S1Me2jDSp+gSAyondYxpjM5RPBBqLT0c=
@@ -50,8 +50,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-go.uploadedlobster.com/discid v0.9.0 h1:EF0EHwaVh6FsbXlZ0c3Czl6pWYkRHF1S/G4ZBuFqAdE=
-go.uploadedlobster.com/discid v0.9.0/go.mod h1:aY/BTw5i7BioAcxI0fxjAz5yEfn93UfcYStatIHn+oY=
+go.uploadedlobster.com/discid v0.10.0 h1:m8ciqpGC/u+WH5kbZy8StS02UD9IvTFievkB/NvNouQ=
+go.uploadedlobster.com/discid v0.10.0/go.mod h1:aY/BTw5i7BioAcxI0fxjAz5yEfn93UfcYStatIHn+oY=
 go.uploadedlobster.com/mbtypes v0.4.0 h1:D5asCgHsRWufj4Yn5u0IuH2J9z1UuYImYkYIp1Z1Q7s=
 go.uploadedlobster.com/mbtypes v0.4.0/go.mod h1:Bu1K1Hl77QTAE2Z7QKiW/JAp9KqYWQebkRRfG02dlZM=
 go.yaml.in/yaml/v3 v3.0.4 h1:tfq32ie2Jv2UxXFdLJdh3jXuOzWiL1fo0bu/FbuKpbc=

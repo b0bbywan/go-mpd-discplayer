@@ -62,10 +62,14 @@ func TestSongSource(t *testing.T) {
 		{"MYUSB2/a.flac", SourceLibrary, ""},
 		{"MYUSB/a.flac", SourceMount, "MYUSB"},
 		{"http://radio.example/live", SourceStream, ""},
+		{"cdda:///1", SourceDisc, ""},
+		// A disc track added from the CUE sheet in the library
+		{".disc-cuer/6507c409/playlist.cue/track0001", SourceDisc, ""},
+		{".disc-cuer2/a.flac", SourceLibrary, ""},
 		{"", "", ""},
 	}
 	for _, tt := range tests {
-		if source, mount := songSource(tt.file, mounts); source != tt.source || mount != tt.mount {
+		if source, mount := songSource(tt.file, discPrefixes(".disc-cuer"), mounts); source != tt.source || mount != tt.mount {
 			t.Errorf("songSource(%q) = %q, %q, want %q, %q", tt.file, source, mount, tt.source, tt.mount)
 		}
 	}

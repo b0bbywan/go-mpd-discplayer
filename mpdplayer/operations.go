@@ -59,22 +59,35 @@ func (rc *ReconnectingMPDClient) Stop() error {
 	})
 }
 
-// StopIfPlaying stops playback when the current song path starts with
-// prefix. The queue is left untouched.
-func (rc *ReconnectingMPDClient) StopIfPlaying(prefix string) error {
+// DiscPrefixes are the path prefixes of the disc tracks: CDDA tracks, and
+// the tracks of the disc CUE sheets when MPD lists them in its library.
+func (rc *ReconnectingMPDClient) DiscPrefixes() []string {
+	return discPrefixes(rc.mpcConfig.CueFolder)
+}
+
+func discPrefixes(cueFolder string) []string {
+	if cueFolder == "" {
+		return []string{CDDAPathPrefix}
+	}
+	return []string{CDDAPathPrefix, cueFolder + "/"}
+}
+
+// StopIfPlaying stops playback when the current song path starts with one
+// of prefixes. The queue is left untouched.
+func (rc *ReconnectingMPDClient) StopIfPlaying(prefixes ...string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		return stopIfPlaying(client, prefix)
+		return stopIfPlaying(client, prefixes)
 	})
 }
 
-// StopAndRemove stops playback when the current song path starts with
-// prefix, then removes the songs under prefix from the queue.
-func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
+// StopAndRemove stops playback when the current song path starts with one of
+// prefixes, then removes the songs under them from the queue.
+func (rc *ReconnectingMPDClient) StopAndRemove(prefixes ...string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if err := stopIfPlaying(client, prefix); err != nil {
+		if err := stopIfPlaying(client, prefixes); err != nil {
 			return err
 		}
-		return deleteFromPlaylist(client, prefix)
+		return deleteFromPlaylist(client, prefixes)
 	})
 }
 
@@ -252,8 +265,8 @@ func addTracks(client *mpd.Client, trackCount int) error {
 	return nil
 }
 
-func stopIfPlaying(client *mpd.Client, label string) error {
-	if !checkPathPlaying(client, label) {
+func stopIfPlaying(client *mpd.Client, prefixes []string) error {
+	if !checkPathPlaying(client, prefixes) {
 		return nil
 	}
 	if err := client.Stop(); err != nil {
@@ -262,7 +275,7 @@ func stopIfPlaying(client *mpd.Client, label string) error {
 	return nil
 }
 
-func checkPathPlaying(client *mpd.Client, checkPath string) bool {
+func checkPathPlaying(client *mpd.Client, prefixes []string) bool {
 	song, err := client.CurrentSong()
 	if err != nil {
 		return true
@@ -273,12 +286,19 @@ func checkPathPlaying(client *mpd.Client, checkPath string) bool {
 		return true
 	}
 
-	return checkSongPath(song, checkPath)
+	return checkSongPath(song, prefixes)
 }
 
-func checkSongPath(song mpd.Attrs, checkPath string) bool {
-	if path, ok := song["file"]; ok {
-		return strings.HasPrefix(path, checkPath)
+func checkSongPath(song mpd.Attrs, prefixes []string) bool {
+	path, ok := song["file"]
+	return ok && hasAnyPrefix(path, prefixes)
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
 	}
 	return false
 }
@@ -299,7 +319,7 @@ func addUri(client *mpd.Client, uri string) error {
 	return nil
 }
 
-func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
+func deleteFromPlaylist(client *mpd.Client, prefixes []string) error {
 	playlist, err := client.PlaylistInfo(-1, -1)
 	if err != nil {
 		return fmt.Errorf("failed to fetch MPD playlist: %w", err)
@@ -308,7 +328,7 @@ func deleteFromPlaylist(client *mpd.Client, checkPath string) error {
 	start := -1 // Initialize start index to -1 to indicate no active range
 
 	for i := len(playlist) - 1; i >= -1; i-- {
-		if i >= 0 && checkSongPath(playlist[i], checkPath) {
+		if i >= 0 && checkSongPath(playlist[i], prefixes) {
 			// Start a new range if not already started
 			if start == -1 {
 				start = i

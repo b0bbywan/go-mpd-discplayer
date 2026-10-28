@@ -45,11 +45,16 @@ func (c *fakeClient) StartDiscPlayback(device string) error {
 func (c *fakeClient) StartUSBPlayback(label string) error { return c.record("StartUSBPlayback", label) }
 func (c *fakeClient) StartPlayback(uri string) error      { return c.record("StartPlayback", uri) }
 func (c *fakeClient) Stop() error                         { return c.record("Stop", "") }
-func (c *fakeClient) StopIfPlaying(prefix string) error   { return c.record("StopIfPlaying", prefix) }
-func (c *fakeClient) StopAndRemove(prefix string) error   { return c.record("StopAndRemove", prefix) }
-func (c *fakeClient) Unmount(label string) error          { return c.record("Unmount", label) }
-func (c *fakeClient) UpdateDB(uri string) error           { return c.record("UpdateDB", uri) }
-func (c *fakeClient) Disconnect()                         { _ = c.record("Disconnect", "") }
+func (c *fakeClient) StopIfPlaying(prefixes ...string) error {
+	return c.record("StopIfPlaying", strings.Join(prefixes, " "))
+}
+func (c *fakeClient) StopAndRemove(prefixes ...string) error {
+	return c.record("StopAndRemove", strings.Join(prefixes, " "))
+}
+func (c *fakeClient) DiscPrefixes() []string     { return []string{"cdda://", ".disc-cuer/"} }
+func (c *fakeClient) Unmount(label string) error { return c.record("Unmount", label) }
+func (c *fakeClient) UpdateDB(uri string) error  { return c.record("UpdateDB", uri) }
+func (c *fakeClient) Disconnect()                { _ = c.record("Disconnect", "") }
 
 func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 	return c.mounts, c.record("USBMounts", "")
@@ -116,7 +121,7 @@ func TestDeviceHandlers(t *testing.T) {
 		// Disc: the speed cannot be set on the fake device, which is only logged
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, wantClient: []string{"StartDiscPlayback /dev/fake"}},
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, fail: "StartDiscPlayback", wantClient: []string{"StartDiscPlayback /dev/fake"}, wantErr: true},
-		{kind: detect.DeviceDisc, event: detect.DeviceRemoved, wantClient: []string{"StopAndRemove cdda://"}},
+		{kind: detect.DeviceDisc, event: detect.DeviceRemoved, wantClient: []string{"StopAndRemove cdda:// .disc-cuer/"}},
 		{kind: detect.DeviceDisc, event: detect.DevicePresent},
 
 		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}},
@@ -163,9 +168,9 @@ func TestPlayerActions(t *testing.T) {
 		{"PlayDisc", func(p *Player) error { return p.PlayDisc("/dev/sr1") }, []string{"StartDiscPlayback /dev/sr1"}, false},
 		{"PlayURL", func(p *Player) error { return p.PlayURL("http://radio/stream") }, []string{"StartPlayback http://radio/stream"}, false},
 		{"Stop", func(p *Player) error { return p.Stop() }, []string{"Stop"}, false},
-		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda://"}, false},
+		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda:// .disc-cuer/"}, false},
 		// Playback is stopped before ejecting, even when the eject fails
-		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda://"}, true},
+		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
 		{"PlayMount", func(p *Player) error { return p.PlayMount("MYUSB") }, []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"StopMount", func(p *Player) error { return p.StopMount("MYUSB") }, []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
 		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
@@ -173,8 +178,8 @@ func TestPlayerActions(t *testing.T) {
 		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
 		{"EjectMount unknown", func(p *Player) error { return p.EjectMount("MYUSB2") }, []string{"USBMounts"}, true},
 		{"ExecuteAction disc play", run(Action{Name: ActionDiscPlay, Device: "/dev/sr1"}), []string{"StartDiscPlayback /dev/sr1"}, false},
-		{"ExecuteAction disc stop", run(Action{Name: ActionDiscStop}), []string{"StopIfPlaying cdda://"}, false},
-		{"ExecuteAction disc eject", run(Action{Name: ActionDiscEject, Device: notADrive}), []string{"StopAndRemove cdda://"}, true},
+		{"ExecuteAction disc stop", run(Action{Name: ActionDiscStop}), []string{"StopIfPlaying cdda:// .disc-cuer/"}, false},
+		{"ExecuteAction disc eject", run(Action{Name: ActionDiscEject, Device: notADrive}), []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
 		{"ExecuteAction mount list", run(Action{Name: ActionMountList}), []string{"USBMounts"}, false},
 		{"ExecuteAction mount play", run(Action{Name: ActionMountPlay, Mount: "MYUSB"}), []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"ExecuteAction mount stop", run(Action{Name: ActionMountStop, Mount: "MYUSB"}), []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},

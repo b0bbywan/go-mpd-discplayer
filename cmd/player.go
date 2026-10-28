@@ -35,8 +35,9 @@ type playerClient interface {
 	StartUSBPlayback(label string) error
 	StartPlayback(uri string) error
 	Stop() error
-	StopIfPlaying(prefix string) error
-	StopAndRemove(prefix string) error
+	StopIfPlaying(prefixes ...string) error
+	StopAndRemove(prefixes ...string) error
+	DiscPrefixes() []string
 	USBMounts() ([]mpdplayer.Mount, error)
 	Status() (mpdplayer.Status, error)
 	Unmount(label string) error
@@ -101,6 +102,7 @@ func NewPlayer(ctx context.Context, cancel context.CancelFunc) (*Player, error) 
 		viper.GetString("MPDConnection.Type"),
 		viper.GetString("MPDConnection.Address"),
 		time.Duration(viper.GetInt("MPDConnection.ReconnectWait")*int(time.Second)),
+		viper.GetString("MPDCueSubfolder"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error validating MPD connection: %w", err)
@@ -267,7 +269,7 @@ func (p *Player) Stop() error {
 
 // StopDisc stops playback when a disc track is playing. The queue is left untouched.
 func (p *Player) StopDisc() error {
-	if err := p.Client.StopIfPlaying(mpdplayer.CDDAPathPrefix); err != nil {
+	if err := p.Client.StopIfPlaying(p.Client.DiscPrefixes()...); err != nil {
 		return fmt.Errorf("error stopping disc playback: %w", err)
 	}
 	return nil
@@ -355,7 +357,7 @@ func (p *Player) EjectDisc(drive string) error {
 		}
 	}
 	// Stop first so MPD is not left reading a disc that is going away
-	if err := p.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
+	if err := p.Client.StopAndRemove(p.Client.DiscPrefixes()...); err != nil {
 		log.Printf("warning: failed to stop disc playback before eject: %v", err)
 	}
 	if err := hwcontrol.EjectDisc(drive); err != nil {

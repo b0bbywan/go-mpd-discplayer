@@ -68,20 +68,26 @@ func (player *Player) newDiscHandler() {
 		detect.DeviceDisc,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			if err := player.PlayDisc(dev.Path()); err != nil {
+			if err := player.insertDisc(dev.Path()); err != nil {
 				return fmt.Errorf("[%s] Error starting %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
+			player.removeDisc()
 			if err := player.Client.StopAndRemove(player.Client.DiscPrefixes()...); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},
-		// processPresent: no autoplay at startup
-		nil,
+		// processPresent: keep the disc in the state, no autoplay at startup
+		func(ctx context.Context, dev detect.Device) error {
+			if err := player.presentDisc(dev.Path()); err != nil {
+				return fmt.Errorf("[%s] Error reading %s at startup: %w", detect.DeviceDisc, dev.Path(), err)
+			}
+			return nil
+		},
 	)
 
 	player.handlers = append(player.handlers, discHandler)
@@ -96,6 +102,7 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return err
 			}
+			player.refreshMounts()
 			if err = player.Client.StartUSBPlayback(relPath); err != nil {
 				return fmt.Errorf("[%s] Error starting %s:%s USB playback: %w", detect.DeviceUSB, dev.Path(), relPath, err)
 			}
@@ -104,6 +111,7 @@ func (player *Player) newUSBHandler() {
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
 			relPath, err := player.Mounter.Unmount(dev.Udev())
+			player.refreshMounts()
 			if err != nil {
 				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
 			}
@@ -118,6 +126,7 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return err
 			}
+			player.refreshMounts()
 			if err = player.Client.UpdateDB(relPath); err != nil {
 				return fmt.Errorf("[%s] Error updating database for %s:%s: %w", detect.DeviceUSB, dev.Path(), relPath, err)
 			}

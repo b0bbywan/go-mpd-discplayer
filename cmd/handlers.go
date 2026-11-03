@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol"
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 // Handler defines a stateless handler capable of handling one type of  device.
@@ -69,17 +69,14 @@ func (player *Player) newDiscHandler() {
 		detect.DeviceDisc,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			if err := hwcontrol.SetDiscSpeed(dev.Path(), player.discSpeed); err != nil {
-				log.Printf("[%s] Error setting disc speed on %s: %v", detect.DeviceDisc, dev.Path(), err)
-			}
-			if err := player.Client.StartDiscPlayback(dev.Path()); err != nil {
+			if err := player.PlayDisc(dev.Path()); err != nil {
 				return fmt.Errorf("[%s] Error starting %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
-			if err := player.Client.StopDiscPlayback(); err != nil {
+			if err := player.Client.StopAndRemove(mpdplayer.CDDAPathPrefix); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s playback: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
@@ -96,9 +93,9 @@ func (player *Player) newUSBHandler() {
 		detect.DeviceUSB,
 		// processAdd
 		func(ctx context.Context, dev detect.Device) error {
-			relPath, err := player.Mounter.Mount(dev.Udev())
+			relPath, err := player.mountUSB(dev)
 			if err != nil {
-				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+				return err
 			}
 			if err = player.Client.StartUSBPlayback(relPath); err != nil {
 				return fmt.Errorf("[%s] Error starting %s:%s USB playback: %w", detect.DeviceUSB, dev.Path(), relPath, err)
@@ -111,16 +108,16 @@ func (player *Player) newUSBHandler() {
 			if err != nil {
 				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
 			}
-			if err = player.Client.StopPlayback(relPath); err != nil {
+			if err = player.Client.StopAndRemove(relPath); err != nil {
 				return fmt.Errorf("[%s] Error stopping %s USB playback: %w", detect.DeviceUSB, dev.Path(), err)
 			}
 			return nil
 		},
 		// processPresent: mount and refresh the library, without touching the queue
 		func(ctx context.Context, dev detect.Device) error {
-			relPath, err := player.Mounter.Mount(dev.Udev())
+			relPath, err := player.mountUSB(dev)
 			if err != nil {
-				return fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+				return err
 			}
 			if err = player.Client.UpdateDB(relPath); err != nil {
 				return fmt.Errorf("[%s] Error updating database for %s:%s: %w", detect.DeviceUSB, dev.Path(), relPath, err)
@@ -131,4 +128,13 @@ func (player *Player) newUSBHandler() {
 	)
 
 	player.handlers = append(player.handlers, usbHandler)
+}
+
+// mountUSB exposes dev to MPD and returns its path in the library.
+func (player *Player) mountUSB(dev detect.Device) (string, error) {
+	relPath, err := player.Mounter.Mount(dev.Udev())
+	if err != nil {
+		return "", fmt.Errorf("[%s] Error getting mount point for %s: %w", detect.DeviceUSB, dev.Path(), err)
+	}
+	return relPath, nil
 }

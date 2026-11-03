@@ -3,7 +3,6 @@ package hwcontrol
 import (
 	"fmt"
 	"log"
-	"os"
 	"runtime"
 	"unsafe"
 
@@ -51,33 +50,14 @@ type sgIoHdr struct {
 // SCSI commands, which still work while another process (MPD, gvfs) holds the
 // drive open or the tray is locked.
 func EjectDisc(device string) error {
-	file, err := openDrive(device)
-	if err != nil {
-		return fmt.Errorf("failed to open device: %w", err)
-	}
-
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			log.Printf("failed to close device file: %s", closeErr)
+	return withDrive(device, openDrive, func(fd int) error {
+		err := cdromEject(fd)
+		if err == nil {
+			return nil
 		}
-	}()
-
-	fd := int(file.Fd())
-	if err = cdromEject(fd); err == nil {
-		return nil
-	}
-	log.Printf("info: CD-ROM eject failed, trying SCSI commands: %v", err)
-	return scsiEject(fd)
-}
-
-// openDrive opens the drive even without a readable disc (O_NONBLOCK). SCSI
-// eject commands need write access, so read-only is only a fallback.
-func openDrive(device string) (*os.File, error) {
-	file, err := os.OpenFile(device, os.O_RDWR|unix.O_NONBLOCK, 0)
-	if err == nil {
-		return file, nil
-	}
-	return os.OpenFile(device, os.O_RDONLY|unix.O_NONBLOCK, 0)
+		log.Printf("info: CD-ROM eject failed, trying SCSI commands: %v", err)
+		return scsiEject(fd)
+	})
 }
 
 func cdromEject(fd int) error {

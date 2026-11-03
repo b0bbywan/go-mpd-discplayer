@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -13,30 +14,17 @@ import (
 )
 
 func main() {
-	// Define flags
-	flag.Usage = usage
-	playFlag := flag.Bool(cmd.ActionPlay, false, "Start playback immediately")
-	stopFlag := flag.Bool(cmd.ActionStop, false, "Stop playback immediately")
-	ejectFlag := flag.Bool(cmd.ActionEject, false, "Stop disc playback and eject the disc")
-	deviceFlag := flag.String("device", "/dev/sr0", "Disc Device")
-	versionFlag := flag.Bool("version", false, "Print version")
-
-	flag.Parse()
-
-	if *versionFlag {
-		fmt.Printf("%s %s\n", cmd.AppName, cmd.AppVersion)
+	opts, err := parseArgs(flag.CommandLine, os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
 		return
 	}
-
-	actions := 0
-	for _, set := range []bool{*playFlag, *stopFlag, *ejectFlag} {
-		if set {
-			actions++
-		}
+	if err != nil {
+		log.Fatal(err)
 	}
-	if actions > 1 {
-		flag.Usage()
-		log.Fatalf("Cannot use --play, --stop and --eject together. Choose one.")
+
+	if opts.version {
+		fmt.Printf("%s %s\n", cmd.AppName, cmd.AppVersion)
+		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -47,22 +35,9 @@ func main() {
 	}
 	defer player.Close()
 
-	// Handle flags
-	if *playFlag {
-		if err := player.ExecuteAction(*deviceFlag, cmd.ActionPlay); err != nil {
-			log.Fatalf("Failed to start playback: %v", err)
-		}
-		return
-	}
-	if *stopFlag {
-		if err := player.ExecuteAction(*deviceFlag, cmd.ActionStop); err != nil {
-			log.Fatalf("Failed to stop playback: %v", err)
-		}
-		return
-	}
-	if *ejectFlag {
-		if err := player.ExecuteAction(*deviceFlag, cmd.ActionEject); err != nil {
-			log.Fatalf("Failed to eject disc: %v", err)
+	if opts.action != "" {
+		if err := player.ExecuteAction(opts.device, opts.action); err != nil {
+			log.Fatalf("%s: %v", actionFailures[opts.action], err)
 		}
 		return
 	}
@@ -73,18 +48,6 @@ func main() {
 	player.Start()
 
 	<-ctx.Done()
-}
-
-func usage() {
-	fmt.Println("Usage:")
-	fmt.Println("  mpd-discplayer [options]")
-	fmt.Println("")
-	fmt.Println("Options:")
-	fmt.Println("  --play   Start playback immediately")
-	fmt.Println("  --stop   Stop playback immediately")
-	fmt.Println("  --eject  Stop disc playback and eject the disc")
-	fmt.Println("  --device <device>   Set disc device (only with --play or --eject)")
-	fmt.Println("  -h, --help   Display this help message")
 }
 
 func signalMonitor(ctx context.Context, cancel context.CancelFunc) {

@@ -12,6 +12,9 @@ import (
 
 	"github.com/jochenvg/go-udev"
 
+	"github.com/b0bbywan/go-disc-cuer/cue"
+	"github.com/b0bbywan/go-disc-cuer/types"
+
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
 	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
@@ -25,6 +28,7 @@ type fakeClient struct {
 	fail     map[string]bool
 	mounts   []mpdplayer.Mount
 	playback mpdplayer.Playback
+	queued   mpdplayer.QueuedDisc
 }
 
 func (c *fakeClient) record(name, arg string) error {
@@ -39,8 +43,8 @@ func (c *fakeClient) record(name, arg string) error {
 	return nil
 }
 
-func (c *fakeClient) StartDiscPlayback(device string) error {
-	return c.record("StartDiscPlayback", device)
+func (c *fakeClient) StartDiscPlayback(device, cuePath string) error {
+	return c.record("StartDiscPlayback", strings.TrimSpace(device+" "+cuePath))
 }
 func (c *fakeClient) StartUSBPlayback(label string) error { return c.record("StartUSBPlayback", label) }
 func (c *fakeClient) StartPlayback(uri string) error      { return c.record("StartPlayback", uri) }
@@ -60,8 +64,45 @@ func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
 	return c.mounts, c.record("USBMounts", "")
 }
 
+func (c *fakeClient) QueuedDisc() (mpdplayer.QueuedDisc, error) {
+	return c.queued, c.record("QueuedDisc", "")
+}
+
 func (c *fakeClient) Status() (mpdplayer.Status, error) {
 	return mpdplayer.Status{Playback: c.playback, Mounts: c.mounts}, c.record("Status", "")
+}
+
+// fakeCuer resolves every disc to res, or fails with err, and reads info as
+// the cached metadata, or fails with cachedErr. It records its calls.
+type fakeCuer struct {
+	res       *cue.Result
+	err       error
+	info      *types.DiscInfo
+	cachedErr error
+	onResolve func() // run when Resolve is called
+	cacheDir  string // cache directory, one subdirectory per disc id
+	calls     []string
+}
+
+func (c *fakeCuer) CuePath(id string) string {
+	return filepath.Join(c.cacheDir, id, "playlist.cue")
+}
+
+func (c *fakeCuer) CoverPath(id string) string {
+	return filepath.Join(c.cacheDir, id, "cover.jpg")
+}
+
+func (c *fakeCuer) Resolve(opts cue.Options) (*cue.Result, error) {
+	c.calls = append(c.calls, "Resolve "+opts.Device)
+	if c.onResolve != nil {
+		c.onResolve()
+	}
+	return c.res, c.err
+}
+
+func (c *fakeCuer) Cached(id string) (*types.DiscInfo, error) {
+	c.calls = append(c.calls, "Cached "+id)
+	return c.info, c.cachedErr
 }
 
 type fakeMounter struct {
@@ -122,16 +163,17 @@ func TestDeviceHandlers(t *testing.T) {
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, wantClient: []string{"StartDiscPlayback /dev/fake"}},
 		{kind: detect.DeviceDisc, event: detect.DeviceAdded, fail: "StartDiscPlayback", wantClient: []string{"StartDiscPlayback /dev/fake"}, wantErr: true},
 		{kind: detect.DeviceDisc, event: detect.DeviceRemoved, wantClient: []string{"StopAndRemove cdda:// .disc-cuer/"}},
-		{kind: detect.DeviceDisc, event: detect.DevicePresent},
+		// Without disc file nor cuer, the disc is kept once MPD tells it is not playing
+		{kind: detect.DeviceDisc, event: detect.DevicePresent, wantClient: []string{"Status"}},
 
-		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceAdded, wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "StartUSBPlayback KEY"}},
 		{kind: detect.DeviceUSB, event: detect.DeviceAdded, mountErr: errFake, wantMounter: []string{"Mount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DeviceAdded, fail: "StartUSBPlayback", wantMounter: []string{"Mount"}, wantClient: []string{"StartUSBPlayback KEY"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, wantMounter: []string{"Unmount"}, wantClient: []string{"StopAndRemove KEY"}},
-		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, mountErr: errFake, wantMounter: []string{"Unmount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DevicePresent, wantMounter: []string{"Mount"}, wantClient: []string{"UpdateDB KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceAdded, fail: "StartUSBPlayback", wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "StartUSBPlayback KEY"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, wantMounter: []string{"Unmount"}, wantClient: []string{"USBMounts", "StopAndRemove KEY"}},
+		{kind: detect.DeviceUSB, event: detect.DeviceRemoved, mountErr: errFake, wantMounter: []string{"Unmount"}, wantClient: []string{"USBMounts"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DevicePresent, wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "UpdateDB KEY"}},
 		{kind: detect.DeviceUSB, event: detect.DevicePresent, mountErr: errFake, wantMounter: []string{"Mount"}, wantErr: true},
-		{kind: detect.DeviceUSB, event: detect.DevicePresent, fail: "UpdateDB", wantMounter: []string{"Mount"}, wantClient: []string{"UpdateDB KEY"}, wantErr: true},
+		{kind: detect.DeviceUSB, event: detect.DevicePresent, fail: "UpdateDB", wantMounter: []string{"Mount"}, wantClient: []string{"USBMounts", "UpdateDB KEY"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		name := fmt.Sprintf("%s_%s_mountErr=%v_fail=%s", tt.kind, tt.event, tt.mountErr != nil, tt.fail)
@@ -154,6 +196,33 @@ func TestDeviceHandlers(t *testing.T) {
 	}
 }
 
+func TestRefreshMounts(t *testing.T) {
+	usb := []mpdplayer.Mount{{Name: "MYUSB", Storage: "udisks://x"}}
+	client := &fakeClient{mounts: usb}
+	p := newTestPlayer(client, &fakeMounter{relPath: "MYUSB"})
+
+	if err := callHandler(t, p, detect.DeviceUSB, detect.DeviceAdded); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.State().Mounts; !reflect.DeepEqual(got, usb) {
+		t.Errorf("state mounts = %v, want %v", got, usb)
+	}
+
+	// MPD unreachable: the state keeps the previous list
+	client.mounts = nil
+	client.fail = map[string]bool{"USBMounts": true}
+	p.refreshMounts()
+	if got := p.State().Mounts; !reflect.DeepEqual(got, usb) {
+		t.Errorf("state mounts after a failed refresh = %v, want %v", got, usb)
+	}
+
+	client.fail = nil
+	p.refreshMounts()
+	if got := p.State().Mounts; got != nil {
+		t.Errorf("state mounts after unmount = %v, want none", got)
+	}
+}
+
 func TestPlayerActions(t *testing.T) {
 	notADrive := filepath.Join(t.TempDir(), "sr0")
 	run := func(a Action) func(p *Player) error {
@@ -173,7 +242,7 @@ func TestPlayerActions(t *testing.T) {
 		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
 		{"PlayMount", func(p *Player) error { return p.PlayMount("MYUSB") }, []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"StopMount", func(p *Player) error { return p.StopMount("MYUSB") }, []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
-		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
+		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB", "USBMounts"}, false},
 		// An unknown mount is rejected before touching the player
 		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
 		{"EjectMount unknown", func(p *Player) error { return p.EjectMount("MYUSB2") }, []string{"USBMounts"}, true},
@@ -183,7 +252,7 @@ func TestPlayerActions(t *testing.T) {
 		{"ExecuteAction mount list", run(Action{Name: ActionMountList}), []string{"USBMounts"}, false},
 		{"ExecuteAction mount play", run(Action{Name: ActionMountPlay, Mount: "MYUSB"}), []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"ExecuteAction mount stop", run(Action{Name: ActionMountStop, Mount: "MYUSB"}), []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
-		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
+		{"ExecuteAction mount eject", run(Action{Name: ActionMountEject, Mount: "MYUSB"}), []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB", "USBMounts"}, false},
 		{"ExecuteAction stream play", run(Action{Name: ActionStreamPlay, URL: "http://radio/stream"}), []string{"StartPlayback http://radio/stream"}, false},
 		{"ExecuteAction stop", run(Action{Name: ActionStop}), []string{"Stop"}, false},
 		{"ExecuteAction status", run(Action{Name: ActionStatus}), []string{"Status"}, false},
@@ -194,6 +263,32 @@ func TestPlayerActions(t *testing.T) {
 			err := tt.action(newTestPlayer(client, &fakeMounter{}))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(client.calls, tt.want) {
+				t.Errorf("client calls = %v, want %v", client.calls, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlayDiscResolvesCue(t *testing.T) {
+	tests := []struct {
+		name string
+		cuer cueResolver
+		want []string
+	}{
+		{"resolved", &fakeCuer{res: &cue.Result{CuePath: "/cache/x/playlist.cue"}}, []string{"StartDiscPlayback /dev/sr1 /cache/x/playlist.cue"}},
+		// Without a CUE sheet the tracks are played without metadata
+		{"resolve error", &fakeCuer{err: errFake}, []string{"StartDiscPlayback /dev/sr1"}},
+		{"no cuer", nil, []string{"StartDiscPlayback /dev/sr1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeClient{}
+			p := newTestPlayer(client, &fakeMounter{})
+			p.Cuer = tt.cuer
+			if err := p.PlayDisc("/dev/sr1"); err != nil {
+				t.Fatalf("PlayDisc() error = %v", err)
 			}
 			if !reflect.DeepEqual(client.calls, tt.want) {
 				t.Errorf("client calls = %v, want %v", client.calls, tt.want)

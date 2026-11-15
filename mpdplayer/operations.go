@@ -1,6 +1,7 @@
 package mpdplayer
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/b0bbywan/go-disc-cuer/config"
 	"github.com/b0bbywan/go-disc-cuer/cue"
+
+	"github.com/b0bbywan/go-mpd-discplayer/internal/retry"
 )
 
 const (
@@ -45,18 +48,26 @@ func (rc *ReconnectingMPDClient) startPlayback(playbackFunc PlaybackAction, devi
 	})
 }
 
-func (rc *ReconnectingMPDClient) StopDiscPlayback() error {
-	return rc.StopPlayback(CDDAPathPrefix)
+// Stop stops playback, whatever is playing. The queue is left untouched.
+func (rc *ReconnectingMPDClient) Stop() error {
+	return rc.execute(func(client *mpd.Client) error {
+		if err := client.Stop(); err != nil {
+			return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
+		}
+		return nil
+	})
 }
 
-func (rc *ReconnectingMPDClient) StopPlayback(label string) error {
+// StopAndRemove stops playback when the current song path starts with
+// prefix, then removes the songs under prefix from the queue.
+func (rc *ReconnectingMPDClient) StopAndRemove(prefix string) error {
 	return rc.execute(func(client *mpd.Client) error {
-		if checkPathPlaying(client, label) {
+		if checkPathPlaying(client, prefix) {
 			if err := client.Stop(); err != nil {
 				return fmt.Errorf("error: Failed to stop MPD playback: %w", err)
 			}
 		}
-		return deleteFromPlaylist(client, label)
+		return deleteFromPlaylist(client, prefix)
 	})
 }
 
@@ -268,21 +279,16 @@ func UpdateDBAndWait(client *mpd.Client, label string) error {
 	if _, err := client.Update(label); err != nil {
 		return fmt.Errorf("failed to update database: %w", err)
 	}
-	timeout := 30 * time.Second
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	timeoutChan := time.After(timeout)
-	for {
-		if !DbUpdating(client) {
-			log.Println("Database update finished.")
-			return nil
+	if err := retry.Until(30*time.Second, 500*time.Millisecond, func() error {
+		if DbUpdating(client) {
+			return errors.New("database did not finish update within timeout")
 		}
-		select {
-		case <-ticker.C:
-		case <-timeoutChan:
-			return fmt.Errorf("database did not finish update within timeout")
-		}
+		return nil
+	}); err != nil {
+		return err
 	}
+	log.Println("Database update finished.")
+	return nil
 }
 
 func DbUpdating(client *mpd.Client) bool {
@@ -300,11 +306,8 @@ func findNeighbor(client *mpd.Client, identifiers []string) (string, error) {
 		return "", fmt.Errorf("failed to list neighbors, is udisk neighbor plugin enabled?: %w", err)
 	}
 	for _, v := range res {
-		uri := v["neighbor"]
-		for _, id := range identifiers {
-			if strings.Contains(uri, id) {
-				return uri, nil
-			}
+		if uri := v["neighbor"]; containsAny(uri, identifiers) {
+			return uri, nil
 		}
 	}
 	var neighbors []string

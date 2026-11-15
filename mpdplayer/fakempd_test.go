@@ -26,6 +26,8 @@ type fakeMPD struct {
 	mounts    []fakeMount
 	neighbors []string
 	commands  []string
+	// updating is the number of status calls that still report a database update
+	updating int
 }
 
 func newFakeMPD() *fakeMPD {
@@ -112,6 +114,10 @@ func (f *fakeMPD) handle(line string) string {
 		}
 		f.queue = append(f.queue[:start:start], f.queue[end:]...)
 	case "status":
+		if f.updating > 0 {
+			f.updating--
+			return fmt.Sprintf("playlistlength: %d\nupdating_db: 1\nOK\n", len(f.queue))
+		}
 		return fmt.Sprintf("playlistlength: %d\nOK\n", len(f.queue))
 	case "update":
 		return "updating_db: 1\nOK\n"

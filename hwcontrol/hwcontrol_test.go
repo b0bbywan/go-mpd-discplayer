@@ -1,6 +1,7 @@
 package hwcontrol
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,5 +61,26 @@ func TestSetDiscSpeed(t *testing.T) {
 	}
 	if err := SetDiscSpeed(notADrive(t), 12); err == nil {
 		t.Error("setting the speed of a regular file should fail")
+	}
+}
+
+func TestWithDrive(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	called := false
+	if err := withDrive(missing, openReadOnly, func(int) error { called = true; return nil }); err == nil || called {
+		t.Errorf("withDrive() on a missing device = %v, fn called = %v", err, called)
+	}
+
+	errFn := errors.New("ioctl failed")
+	var gotFd int
+	err := withDrive(notADrive(t), openReadOnly, func(fd int) error {
+		gotFd = fd
+		return errFn
+	})
+	if !errors.Is(err, errFn) {
+		t.Errorf("withDrive() error = %v, want the error of fn", err)
+	}
+	if gotFd <= 0 {
+		t.Errorf("fn got fd %d", gotFd)
 	}
 }

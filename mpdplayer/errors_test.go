@@ -47,3 +47,26 @@ func TestExecuteMarksUnreachableMPD(t *testing.T) {
 		t.Errorf("MPD unreachable: error = %v, want ErrMPD", err)
 	}
 }
+
+func TestConnectReportsDialError(t *testing.T) {
+	// A port nobody listens on
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	conn, err := NewMPDConnection("tcp", addr, 100*time.Millisecond, ".disc-cuer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewReconnectingMPDClient(context.Background(), conn)
+	t.Cleanup(client.Disconnect)
+
+	// The error says why the connection failed, not %!w(<nil>)
+	var opErr *net.OpError
+	if err := client.connectWithoutLock(); !errors.As(err, &opErr) {
+		t.Errorf("error = %v, want it to wrap the dial error", err)
+	}
+}

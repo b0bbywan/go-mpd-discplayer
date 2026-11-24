@@ -93,7 +93,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		}
 	}
 
-	var err error
+	var lastErr error
 	start := time.Now()
 	for retries := 0; time.Since(start) < rc.mpcConfig.ReconnectWait; retries++ {
 		client, err := mpd.Dial(rc.mpcConfig.Type, rc.mpcConfig.Address)
@@ -101,6 +101,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 			rc.client = client
 			return nil
 		}
+		lastErr = err
 		// Calculate wait time with exponential backoff, capped by reconnectWait
 		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 
@@ -112,7 +113,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		case <-time.After(waitTime): // Sleep for the calculated retry interval
 		}
 	}
-	return fmt.Errorf("failed to connect to MPD server %s://%s after %s: %w", rc.mpcConfig.Type, rc.mpcConfig.Address, rc.mpcConfig.ReconnectWait, err)
+	return fmt.Errorf("failed to connect to MPD server %s://%s after %s: %w", rc.mpcConfig.Type, rc.mpcConfig.Address, rc.mpcConfig.ReconnectWait, lastErr)
 }
 
 func reconnectingWaitTime(retries int, reconnectWait time.Duration, start time.Time) time.Duration {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strconv"
 )
 
 // CLI action names, the commands typed after the program name.
@@ -16,6 +17,7 @@ const (
 	ActionMountEject = "mount eject"
 	ActionStreamPlay = "stream play"
 	ActionStop       = "stop"
+	ActionStatus     = "status"
 )
 
 // Action is a CLI action. Device is the drive used by disc play and eject,
@@ -49,6 +51,8 @@ func (player *Player) ExecuteAction(out io.Writer, action Action) error {
 		return player.PlayURL(action.URL)
 	case ActionStop:
 		return player.Stop()
+	case ActionStatus:
+		return player.printStatus(out)
 	default:
 		return fmt.Errorf("unknown action: %s", action.Name)
 	}
@@ -67,4 +71,56 @@ func (player *Player) printMounts(out io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// printStatus writes the playback state, one "key: value" per line with the
+// keys of GET /player/status, leaving out what is missing, then one
+// "mounts: name<TAB>storage" line per USB storage mounted in MPD.
+func (player *Player) printStatus(out io.Writer) error {
+	st, err := player.Status()
+	if err != nil {
+		return err
+	}
+	pb := st.Playback
+	lines := [][2]string{
+		{"state", pb.State},
+		{"source", pb.Source},
+		{"mount", pb.Mount},
+		{"title", pb.Title},
+		{"artist", pb.Artist},
+		{"album", pb.Album},
+		{"name", pb.Name},
+		{"url", pb.URL},
+		{"position", formatPosition(pb.Position)},
+		{"length", strconv.Itoa(pb.Length)},
+		{"elapsed", formatSeconds(pb.Elapsed)},
+		{"duration", formatSeconds(pb.Duration)},
+	}
+	for _, m := range st.Mounts {
+		lines = append(lines, [2]string{"mounts", m.Name + "\t" + m.Storage})
+	}
+	for _, l := range lines {
+		if l[1] == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(out, "%s: %s\n", l[0], l[1]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// formatPosition and formatSeconds format a status number, "" when missing.
+func formatPosition(pos int) string {
+	if pos == 0 {
+		return ""
+	}
+	return strconv.Itoa(pos)
+}
+
+func formatSeconds(s *float64) string {
+	if s == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*s, 'f', -1, 64)
 }

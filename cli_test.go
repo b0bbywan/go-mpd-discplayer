@@ -33,6 +33,10 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"--device", "/dev/sr1", "disc", "play"}, discPlay("/dev/sr1")},
 		{[]string{"disc", "stop"}, options{action: cmd.Action{Name: cmd.ActionDiscStop}}},
 		{[]string{"disc", "eject", "-device=/dev/sr1"}, options{action: cmd.Action{Name: cmd.ActionDiscEject, Device: "/dev/sr1"}}},
+		{[]string{"mount", "list"}, options{action: cmd.Action{Name: cmd.ActionMountList}}},
+		{[]string{"mount", "play", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountPlay, Mount: "MYUSB"}}},
+		{[]string{"mount", "stop", "MY USB"}, options{action: cmd.Action{Name: cmd.ActionMountStop, Mount: "MY USB"}}},
+		{[]string{"mount", "eject", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountEject, Mount: "MYUSB"}}},
 		{[]string{"stream", "play", "https://radio/live"}, options{action: cmd.Action{Name: cmd.ActionStreamPlay, URL: "https://radio/live"}}},
 		{[]string{"stop"}, options{action: cmd.Action{Name: cmd.ActionStop}}},
 	}
@@ -84,6 +88,11 @@ func TestParseArgsErrors(t *testing.T) {
 		{[]string{"disc", "rewind"}, nil},
 		{[]string{"disc", "stop", "--device", "/dev/sr1"}, nil},
 		{[]string{"disc", "play", "extra"}, nil},
+		{[]string{"mount"}, nil},
+		{[]string{"mount", "list", "MYUSB"}, nil},
+		{[]string{"mount", "play"}, nil},
+		{[]string{"mount", "rewind", "MYUSB"}, nil},
+		{[]string{"mount", "play", "MYUSB", "extra"}, nil},
 		{[]string{"stream", "play"}, nil},
 		{[]string{"stream", "play", "a", "b"}, nil},
 		{[]string{"stop", "now"}, nil},
@@ -103,6 +112,7 @@ func TestUsage(t *testing.T) {
 	_, out, _ := parse("-h")
 	for _, want := range []string{
 		"disc play [--device <device>]", "disc stop", "disc eject [--device <device>]",
+		"mount list", "mount play <name>", "mount stop <name>", "mount eject <name>",
 		"stream play <url>", "stop ", "--version ", "(default: /dev/sr0)", "-h, --help",
 		"--play ", "--stop ", "--eject ",
 	} {
@@ -115,6 +125,7 @@ func TestUsage(t *testing.T) {
 func TestActionFailures(t *testing.T) {
 	for _, action := range []string{
 		cmd.ActionDiscPlay, cmd.ActionDiscStop, cmd.ActionDiscEject,
+		cmd.ActionMountList, cmd.ActionMountPlay, cmd.ActionMountStop, cmd.ActionMountEject,
 		cmd.ActionStreamPlay, cmd.ActionStop,
 	} {
 		if actionFailures[action] == "" {

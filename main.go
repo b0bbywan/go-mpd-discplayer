@@ -36,7 +36,7 @@ func main() {
 	defer player.Close()
 
 	if opts.action.Name != "" {
-		if err := player.ExecuteAction(opts.action); err != nil {
+		if err := player.ExecuteAction(os.Stdout, opts.action); err != nil {
 			log.Fatalf("%s: %v", actionFailures[opts.action.Name], err)
 		}
 		return

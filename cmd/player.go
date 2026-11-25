@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,8 @@ type playerClient interface {
 	Stop() error
 	StopIfPlaying(prefix string) error
 	StopAndRemove(prefix string) error
+	USBMounts() ([]mpdplayer.Mount, error)
+	Unmount(label string) error
 	UpdateDB(uri string) error
 	Disconnect()
 }
@@ -265,6 +268,69 @@ func (p *Player) Stop() error {
 func (p *Player) StopDisc() error {
 	if err := p.Client.StopIfPlaying(mpdplayer.CDDAPathPrefix); err != nil {
 		return fmt.Errorf("error stopping disc playback: %w", err)
+	}
+	return nil
+}
+
+// Mounts lists the USB storages mounted in MPD. The list is empty with the
+// symlink mount method, where MPD mounts nothing.
+func (p *Player) Mounts() ([]mpdplayer.Mount, error) {
+	mounts, err := p.Client.USBMounts()
+	if err != nil {
+		return nil, fmt.Errorf("error listing mounts: %w", err)
+	}
+	return mounts, nil
+}
+
+// PlayMount replaces the queue with the files of the USB storage mounted as
+// name and starts playback.
+func (p *Player) PlayMount(name string) error {
+	if err := p.checkMount(name); err != nil {
+		return err
+	}
+	if err := p.Client.StartUSBPlayback(name); err != nil {
+		return fmt.Errorf("error playing %s: %w", name, err)
+	}
+	return nil
+}
+
+// StopMount stops playback when a file of the USB storage mounted as name is
+// playing. The queue is left untouched.
+func (p *Player) StopMount(name string) error {
+	if err := p.checkMount(name); err != nil {
+		return err
+	}
+	if err := p.Client.StopIfPlaying(mpdplayer.MountPrefix(name)); err != nil {
+		return fmt.Errorf("error stopping %s playback: %w", name, err)
+	}
+	return nil
+}
+
+// EjectMount stops playback of the USB storage mounted as name, removes its
+// files from the queue, then unmounts it from MPD.
+func (p *Player) EjectMount(name string) error {
+	if err := p.checkMount(name); err != nil {
+		return err
+	}
+	// Stop first so MPD is not left reading a storage that is going away
+	if err := p.Client.StopAndRemove(mpdplayer.MountPrefix(name)); err != nil {
+		log.Printf("warning: failed to stop %s playback before unmount: %v", name, err)
+	}
+	if err := p.Client.Unmount(name); err != nil {
+		return fmt.Errorf("error unmounting %s: %w", name, err)
+	}
+	return nil
+}
+
+// checkMount fails with mpdplayer.ErrUnknownMount unless name is a USB
+// storage mounted in MPD.
+func (p *Player) checkMount(name string) error {
+	mounts, err := p.Mounts()
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(mounts, func(m mpdplayer.Mount) bool { return m.Name == name }) {
+		return fmt.Errorf("%s: %w", name, mpdplayer.ErrUnknownMount)
 	}
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/jochenvg/go-udev"
 
 	"github.com/b0bbywan/go-mpd-discplayer/hwcontrol/detect"
+	"github.com/b0bbywan/go-mpd-discplayer/mpdplayer"
 )
 
 var errFake = errors.New("fake error")
@@ -18,8 +19,9 @@ var errFake = errors.New("fake error")
 // fakeClient records the MPD operations, as "name arg". Operations listed in
 // fail return errFake.
 type fakeClient struct {
-	calls []string
-	fail  map[string]bool
+	calls  []string
+	fail   map[string]bool
+	mounts []mpdplayer.Mount
 }
 
 func (c *fakeClient) record(name, arg string) error {
@@ -42,8 +44,13 @@ func (c *fakeClient) StartPlayback(uri string) error      { return c.record("Sta
 func (c *fakeClient) Stop() error                         { return c.record("Stop", "") }
 func (c *fakeClient) StopIfPlaying(prefix string) error   { return c.record("StopIfPlaying", prefix) }
 func (c *fakeClient) StopAndRemove(prefix string) error   { return c.record("StopAndRemove", prefix) }
+func (c *fakeClient) Unmount(label string) error          { return c.record("Unmount", label) }
 func (c *fakeClient) UpdateDB(uri string) error           { return c.record("UpdateDB", uri) }
 func (c *fakeClient) Disconnect()                         { _ = c.record("Disconnect", "") }
+
+func (c *fakeClient) USBMounts() ([]mpdplayer.Mount, error) {
+	return c.mounts, c.record("USBMounts", "")
+}
 
 type fakeMounter struct {
 	relPath string
@@ -149,13 +156,19 @@ func TestPlayerActions(t *testing.T) {
 		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda://"}, false},
 		// Playback is stopped before ejecting, even when the eject fails
 		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda://"}, true},
+		{"PlayMount", func(p *Player) error { return p.PlayMount("MYUSB") }, []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
+		{"StopMount", func(p *Player) error { return p.StopMount("MYUSB") }, []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
+		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
+		// An unknown mount is rejected before touching the player
+		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
+		{"EjectMount unknown", func(p *Player) error { return p.EjectMount("MYUSB2") }, []string{"USBMounts"}, true},
 		{"ExecuteAction play", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionPlay) }, []string{"StartDiscPlayback /dev/sr1"}, false},
 		{"ExecuteAction stop", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionStop) }, []string{"Stop"}, false},
 		{"ExecuteAction eject", func(p *Player) error { return p.ExecuteAction(notADrive, ActionEject) }, []string{"StopAndRemove cdda://"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &fakeClient{}
+			client := &fakeClient{mounts: []mpdplayer.Mount{{Name: "MYUSB", Storage: "udisks://x"}}}
 			err := tt.action(newTestPlayer(client, &fakeMounter{}))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
@@ -164,5 +177,12 @@ func TestPlayerActions(t *testing.T) {
 				t.Errorf("client calls = %v, want %v", client.calls, tt.want)
 			}
 		})
+	}
+}
+
+func TestUnknownMountError(t *testing.T) {
+	p := newTestPlayer(&fakeClient{}, &fakeMounter{})
+	if err := p.StopMount("MYUSB"); !errors.Is(err, mpdplayer.ErrUnknownMount) {
+		t.Errorf("StopMount() = %v, want ErrUnknownMount", err)
 	}
 }

@@ -28,7 +28,7 @@ func TestParseArgs(t *testing.T) {
 	}{
 		{nil, options{}},
 		{[]string{"--version"}, options{version: true}},
-		{[]string{"disc", "play"}, discPlay("/dev/sr0")},
+		{[]string{"disc", "play"}, discPlay("")},
 		{[]string{"disc", "play", "--device", "/dev/sr1"}, discPlay("/dev/sr1")},
 		{[]string{"--device", "/dev/sr1", "disc", "play"}, discPlay("/dev/sr1")},
 		{[]string{"disc", "stop"}, options{action: cmd.Action{Name: cmd.ActionDiscStop}}},
@@ -56,7 +56,7 @@ func TestParseArgsLegacy(t *testing.T) {
 		args []string
 		want cmd.Action
 	}{
-		{[]string{"--play"}, cmd.Action{Name: cmd.ActionDiscPlay, Device: "/dev/sr0"}},
+		{[]string{"--play"}, cmd.Action{Name: cmd.ActionDiscPlay}},
 		{[]string{"--stop"}, cmd.Action{Name: cmd.ActionStop}},
 		{[]string{"--eject", "--device", "/dev/sr1"}, cmd.Action{Name: cmd.ActionDiscEject, Device: "/dev/sr1"}},
 		{[]string{"-play", "-device=/dev/sr1"}, cmd.Action{Name: cmd.ActionDiscPlay, Device: "/dev/sr1"}},
@@ -113,7 +113,7 @@ func TestUsage(t *testing.T) {
 	for _, want := range []string{
 		"disc play [--device <device>]", "disc stop", "disc eject [--device <device>]",
 		"mount list", "mount play <name>", "mount stop <name>", "mount eject <name>",
-		"stream play <url>", "stop ", "--version ", "(default: /dev/sr0)", "-h, --help",
+		"stream play <url>", "stop ", "--version ", "(default: the drive holding a disc)", "-h, --help",
 		"--play ", "--stop ", "--eject ",
 	} {
 		if !strings.Contains(out, want) {

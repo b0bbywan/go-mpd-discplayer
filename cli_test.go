@@ -32,10 +32,12 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"disc", "play", "--device", "/dev/sr1"}, discPlay("/dev/sr1")},
 		{[]string{"--device", "/dev/sr1", "disc", "play"}, discPlay("/dev/sr1")},
 		{[]string{"disc", "stop"}, options{action: cmd.Action{Name: cmd.ActionDiscStop}}},
+		{[]string{"disc", "clear"}, options{action: cmd.Action{Name: cmd.ActionDiscClear}}},
 		{[]string{"disc", "eject", "-device=/dev/sr1"}, options{action: cmd.Action{Name: cmd.ActionDiscEject, Device: "/dev/sr1"}}},
 		{[]string{"mount", "list"}, options{action: cmd.Action{Name: cmd.ActionMountList}}},
 		{[]string{"mount", "play", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountPlay, Mount: "MYUSB"}}},
 		{[]string{"mount", "stop", "MY USB"}, options{action: cmd.Action{Name: cmd.ActionMountStop, Mount: "MY USB"}}},
+		{[]string{"mount", "clear", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountClear, Mount: "MYUSB"}}},
 		{[]string{"mount", "eject", "MYUSB"}, options{action: cmd.Action{Name: cmd.ActionMountEject, Mount: "MYUSB"}}},
 		{[]string{"stream", "play", "https://radio/live"}, options{action: cmd.Action{Name: cmd.ActionStreamPlay, URL: "https://radio/live"}}},
 		{[]string{"stop"}, options{action: cmd.Action{Name: cmd.ActionStop}}},
@@ -58,7 +60,8 @@ func TestParseArgsLegacy(t *testing.T) {
 		want cmd.Action
 	}{
 		{[]string{"--play"}, cmd.Action{Name: cmd.ActionDiscPlay}},
-		{[]string{"--stop"}, cmd.Action{Name: cmd.ActionStop}},
+		// --stop of 0.9.0 stopped the disc and removed its tracks from the queue
+		{[]string{"--stop"}, cmd.Action{Name: cmd.ActionDiscClear}},
 		{[]string{"--eject", "--device", "/dev/sr1"}, cmd.Action{Name: cmd.ActionDiscEject, Device: "/dev/sr1"}},
 		{[]string{"-play", "-device=/dev/sr1"}, cmd.Action{Name: cmd.ActionDiscPlay, Device: "/dev/sr1"}},
 	}
@@ -88,6 +91,7 @@ func TestParseArgsErrors(t *testing.T) {
 		{[]string{"disc"}, nil},
 		{[]string{"disc", "rewind"}, nil},
 		{[]string{"disc", "stop", "--device", "/dev/sr1"}, nil},
+		{[]string{"disc", "clear", "--device", "/dev/sr1"}, nil},
 		{[]string{"disc", "play", "extra"}, nil},
 		{[]string{"mount"}, nil},
 		{[]string{"mount", "list", "MYUSB"}, nil},
@@ -113,8 +117,8 @@ func TestParseArgsErrors(t *testing.T) {
 func TestUsage(t *testing.T) {
 	_, out, _ := parse("-h")
 	for _, want := range []string{
-		"disc play [--device <device>]", "disc stop", "disc eject [--device <device>]",
-		"mount list", "mount play <name>", "mount stop <name>", "mount eject <name>",
+		"disc play [--device <device>]", "disc stop", "disc clear", "disc eject [--device <device>]",
+		"mount list", "mount play <name>", "mount stop <name>", "mount clear <name>", "mount eject <name>",
 		"stream play <url>", "stop ", "status ", "--version ", "(default: the drive holding a disc)", "-h, --help",
 		"--play ", "--stop ", "--eject ",
 	} {
@@ -126,8 +130,8 @@ func TestUsage(t *testing.T) {
 
 func TestActionFailures(t *testing.T) {
 	for _, action := range []string{
-		cmd.ActionDiscPlay, cmd.ActionDiscStop, cmd.ActionDiscEject,
-		cmd.ActionMountList, cmd.ActionMountPlay, cmd.ActionMountStop, cmd.ActionMountEject,
+		cmd.ActionDiscPlay, cmd.ActionDiscStop, cmd.ActionDiscClear, cmd.ActionDiscEject,
+		cmd.ActionMountList, cmd.ActionMountPlay, cmd.ActionMountStop, cmd.ActionMountClear, cmd.ActionMountEject,
 		cmd.ActionStreamPlay, cmd.ActionStop, cmd.ActionStatus,
 	} {
 		if actionFailures[action] == "" {

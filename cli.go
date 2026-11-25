@@ -20,10 +20,12 @@ type options struct {
 var actionFailures = map[string]string{
 	cmd.ActionDiscPlay:   "Failed to start disc playback",
 	cmd.ActionDiscStop:   "Failed to stop disc playback",
+	cmd.ActionDiscClear:  "Failed to clear disc tracks",
 	cmd.ActionDiscEject:  "Failed to eject disc",
 	cmd.ActionMountList:  "Failed to list mounts",
 	cmd.ActionMountPlay:  "Failed to start USB playback",
 	cmd.ActionMountStop:  "Failed to stop USB playback",
+	cmd.ActionMountClear: "Failed to clear USB files",
 	cmd.ActionMountEject: "Failed to unmount USB storage",
 	cmd.ActionStreamPlay: "Failed to play stream",
 	cmd.ActionStop:       "Failed to stop playback",
@@ -33,7 +35,7 @@ var actionFailures = map[string]string{
 // legacyActions maps the deprecated action flags to their command.
 var legacyActions = map[string]string{
 	"play":  cmd.ActionDiscPlay,
-	"stop":  cmd.ActionStop,
+	"stop":  cmd.ActionDiscClear,
 	"eject": cmd.ActionDiscEject,
 }
 
@@ -86,8 +88,8 @@ func parseArgs(fs *flag.FlagSet, args []string) (options, error) {
 	return opts, err
 }
 
-// parseCommand parses a command and its arguments: disc play|stop|eject,
-// mount list|play|stop|eject, stream play <url>, stop or status.
+// parseCommand parses a command and its arguments: disc play|stop|clear|eject,
+// mount list|play|stop|clear|eject, stream play <url>, stop or status.
 func parseCommand(fs *flag.FlagSet, args []string, device string) (cmd.Action, error) {
 	switch {
 	case args[0] == "stop" && len(args) == 1:
@@ -96,7 +98,7 @@ func parseCommand(fs *flag.FlagSet, args []string, device string) (cmd.Action, e
 		return cmd.Action{Name: cmd.ActionStatus}, nil
 	case args[0] == "mount" && len(args) == 2 && args[1] == "list":
 		return cmd.Action{Name: cmd.ActionMountList}, nil
-	case args[0] == "mount" && len(args) == 3 && slices.Contains([]string{"play", "stop", "eject"}, args[1]):
+	case args[0] == "mount" && len(args) == 3 && slices.Contains([]string{"play", "stop", "clear", "eject"}, args[1]):
 		return cmd.Action{Name: "mount " + args[1], Mount: args[2]}, nil
 	case args[0] == "stream" && len(args) == 3 && args[1] == "play":
 		return cmd.Action{Name: cmd.ActionStreamPlay, URL: args[2]}, nil
@@ -116,7 +118,7 @@ func parseDisc(fs *flag.FlagSet, name string, args []string, device string) (cmd
 	case cmd.ActionDiscPlay, cmd.ActionDiscEject:
 		action.Device = device
 		sub.StringVar(&action.Device, "device", device, "Disc device")
-	case cmd.ActionDiscStop:
+	case cmd.ActionDiscStop, cmd.ActionDiscClear:
 	default:
 		return action, usageError(fs, fmt.Errorf("invalid command: %s", action.Name))
 	}
@@ -145,11 +147,13 @@ func usage(fs *flag.FlagSet) {
 Commands:
   disc play [--device <device>]    Play the disc
   disc stop                        Stop playback if the disc is playing, the queue is left untouched
-  disc eject [--device <device>]   Stop disc playback and eject the disc
+  disc clear                       Stop playback if the disc is playing, then remove the disc tracks from the queue
+  disc eject [--device <device>]   Clear the disc tracks, then eject the disc
   mount list                       List the USB storages mounted in MPD: name, then storage
   mount play <name>                Play a USB storage
   mount stop <name>                Stop playback if the USB storage is playing, the queue is left untouched
-  mount eject <name>               Stop the USB storage playback and unmount it from MPD
+  mount clear <name>               Stop playback if the USB storage is playing, then remove its files from the queue
+  mount eject <name>               Clear the USB storage files, then unmount it from MPD
   stream play <url>                Play a URL, a webradio for instance
   stop                             Stop playback, whatever is playing
   status                           Print the playback state and the USB storages mounted in MPD
@@ -161,7 +165,7 @@ Options:
 
 Deprecated options:
   --play    Same as "disc play"
-  --stop    Same as "stop"
+  --stop    Same as "disc clear"
   --eject   Same as "disc eject"
 `, cmd.AppName)
 }

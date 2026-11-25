@@ -10,10 +10,12 @@ import (
 const (
 	ActionDiscPlay   = "disc play"
 	ActionDiscStop   = "disc stop"
+	ActionDiscClear  = "disc clear"
 	ActionDiscEject  = "disc eject"
 	ActionMountList  = "mount list"
 	ActionMountPlay  = "mount play"
 	ActionMountStop  = "mount stop"
+	ActionMountClear = "mount clear"
 	ActionMountEject = "mount eject"
 	ActionStreamPlay = "stream play"
 	ActionStop       = "stop"
@@ -37,6 +39,8 @@ func (player *Player) ExecuteAction(out io.Writer, action Action) error {
 		return player.PlayDisc(action.Device)
 	case ActionDiscStop:
 		return player.StopDisc()
+	case ActionDiscClear:
+		return player.ClearDisc()
 	case ActionDiscEject:
 		return player.EjectDisc(action.Device)
 	case ActionMountList:
@@ -45,6 +49,8 @@ func (player *Player) ExecuteAction(out io.Writer, action Action) error {
 		return player.PlayMount(action.Mount)
 	case ActionMountStop:
 		return player.StopMount(action.Mount)
+	case ActionMountClear:
+		return player.ClearMount(action.Mount)
 	case ActionMountEject:
 		return player.EjectMount(action.Mount)
 	case ActionStreamPlay:

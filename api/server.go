@@ -17,6 +17,7 @@ import (
 // Player is the disc player driven by the API.
 type Player interface {
 	PlayDisc(drive string) error  // play the disc in drive, "" for the drive holding an audio disc
+	StopDisc() error              // stop playback when the disc is playing
 	EjectDisc(drive string) error // eject the disc in drive, "" for the drive holding one
 
 	Stop() error // stop playback, whatever is playing

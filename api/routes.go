@@ -19,6 +19,10 @@ func (s *Server) registerPlayerRoutes(p Player) {
 		withDisc(p.PlayDisc),
 	)
 	s.mux.HandleFunc(
+		"POST /player/disc/stop",
+		withAction(p.StopDisc),
+	)
+	s.mux.HandleFunc(
 		"POST /player/disc/eject",
 		withDisc(p.EjectDisc),
 	)

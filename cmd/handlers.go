@@ -75,8 +75,8 @@ func (player *Player) newDiscHandler() {
 		},
 		// processRemove
 		func(ctx context.Context, dev detect.Device) error {
-			if err := player.Client.StopAndRemove(player.Client.DiscPrefixes()...); err != nil {
-				return fmt.Errorf("[%s] Error stopping %s playback: %w", detect.DeviceDisc, dev.Path(), err)
+			if err := player.ClearDisc(); err != nil {
+				return fmt.Errorf("[%s] %s removed: %w", detect.DeviceDisc, dev.Path(), err)
 			}
 			return nil
 		},

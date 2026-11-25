@@ -164,13 +164,16 @@ func TestPlayerActions(t *testing.T) {
 		{"PlayURL", func(p *Player) error { return p.PlayURL("http://radio/stream") }, []string{"StartPlayback http://radio/stream"}, false},
 		{"Stop", func(p *Player) error { return p.Stop() }, []string{"Stop"}, false},
 		{"StopDisc", func(p *Player) error { return p.StopDisc() }, []string{"StopIfPlaying cdda:// .disc-cuer/"}, false},
+		{"ClearDisc", func(p *Player) error { return p.ClearDisc() }, []string{"StopAndRemove cdda:// .disc-cuer/"}, false},
 		// Playback is stopped before ejecting, even when the eject fails
 		{"EjectDisc", func(p *Player) error { return p.EjectDisc(notADrive) }, []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
 		{"PlayMount", func(p *Player) error { return p.PlayMount("MYUSB") }, []string{"USBMounts", "StartUSBPlayback MYUSB"}, false},
 		{"StopMount", func(p *Player) error { return p.StopMount("MYUSB") }, []string{"USBMounts", "StopIfPlaying MYUSB/"}, false},
+		{"ClearMount", func(p *Player) error { return p.ClearMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/"}, false},
 		{"EjectMount", func(p *Player) error { return p.EjectMount("MYUSB") }, []string{"USBMounts", "StopAndRemove MYUSB/", "Unmount MYUSB"}, false},
 		// An unknown mount is rejected before touching the player
 		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
+		{"ClearMount unknown", func(p *Player) error { return p.ClearMount("NAS") }, []string{"USBMounts"}, true},
 		{"EjectMount unknown", func(p *Player) error { return p.EjectMount("MYUSB2") }, []string{"USBMounts"}, true},
 		{"ExecuteAction play", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionPlay) }, []string{"StartDiscPlayback /dev/sr1"}, false},
 		{"ExecuteAction stop", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionStop) }, []string{"Stop"}, false},

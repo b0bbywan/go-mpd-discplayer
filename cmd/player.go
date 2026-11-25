@@ -275,6 +275,15 @@ func (p *Player) StopDisc() error {
 	return nil
 }
 
+// ClearDisc stops playback when a disc track is playing, then removes the
+// disc tracks from the queue.
+func (p *Player) ClearDisc() error {
+	if err := p.Client.StopAndRemove(p.Client.DiscPrefixes()...); err != nil {
+		return fmt.Errorf("error clearing disc tracks: %w", err)
+	}
+	return nil
+}
+
 // Mounts lists the USB storages mounted in MPD. The list is empty with the
 // symlink mount method, where MPD mounts nothing.
 func (p *Player) Mounts() ([]mpdplayer.Mount, error) {
@@ -318,15 +327,30 @@ func (p *Player) StopMount(name string) error {
 	return nil
 }
 
-// EjectMount stops playback of the USB storage mounted as name, removes its
-// files from the queue, then unmounts it from MPD.
+// ClearMount stops playback when a file of the USB storage mounted as name
+// is playing, then removes its files from the queue.
+func (p *Player) ClearMount(name string) error {
+	if err := p.checkMount(name); err != nil {
+		return err
+	}
+	return p.clearMount(name)
+}
+
+func (p *Player) clearMount(name string) error {
+	if err := p.Client.StopAndRemove(mpdplayer.MountPrefix(name)); err != nil {
+		return fmt.Errorf("error clearing %s files: %w", name, err)
+	}
+	return nil
+}
+
+// EjectMount clears the USB storage mounted as name, then unmounts it from MPD.
 func (p *Player) EjectMount(name string) error {
 	if err := p.checkMount(name); err != nil {
 		return err
 	}
-	// Stop first so MPD is not left reading a storage that is going away
-	if err := p.Client.StopAndRemove(mpdplayer.MountPrefix(name)); err != nil {
-		log.Printf("warning: failed to stop %s playback before unmount: %v", name, err)
+	// Clear first so MPD is not left reading a storage that is going away
+	if err := p.clearMount(name); err != nil {
+		log.Printf("warning: %v", err)
 	}
 	if err := p.Client.Unmount(name); err != nil {
 		return fmt.Errorf("error unmounting %s: %w", name, err)
@@ -347,7 +371,7 @@ func (p *Player) checkMount(name string) error {
 	return nil
 }
 
-// EjectDisc stops disc playback and ejects the disc in drive. An empty
+// EjectDisc clears the disc tracks and ejects the disc in drive. An empty
 // drive stands for the drive holding a disc, or the only drive when empty.
 func (p *Player) EjectDisc(drive string) error {
 	if drive == "" {
@@ -356,9 +380,9 @@ func (p *Player) EjectDisc(drive string) error {
 			return err
 		}
 	}
-	// Stop first so MPD is not left reading a disc that is going away
-	if err := p.Client.StopAndRemove(p.Client.DiscPrefixes()...); err != nil {
-		log.Printf("warning: failed to stop disc playback before eject: %v", err)
+	// Clear first so MPD is not left reading a disc that is going away
+	if err := p.ClearDisc(); err != nil {
+		log.Printf("warning: %v", err)
 	}
 	if err := hwcontrol.EjectDisc(drive); err != nil {
 		return fmt.Errorf("error ejecting %s: %w", drive, err)

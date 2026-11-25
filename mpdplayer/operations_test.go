@@ -96,6 +96,85 @@ func TestStopAndRemove(t *testing.T) {
 	}
 }
 
+func TestDiscPrefixes(t *testing.T) {
+	cue := []string{"cdda://", ".disc-cuer/"}
+	cddaOnly := []string{"cdda://"}
+	tests := []struct {
+		cueFolder string
+		want      []string
+	}{
+		{".disc-cuer", cue},
+		// The CUE cache is MPDLibraryFolder joined with cueFolder, which
+		// filepath.Join cleans
+		{".disc-cuer/", cue},
+		{"./.disc-cuer", cue},
+		{"/.disc-cuer", cue},
+		{"cache/../.disc-cuer", cue},
+		{"cache//discs", []string{"cdda://", "cache/discs/"}},
+		// The library root or a cache out of the MPD library: no prefix, as
+		// an empty one would match the whole library
+		{"", cddaOnly},
+		{".", cddaOnly},
+		{"/", cddaOnly},
+		{"..", cddaOnly},
+		{"../cuer", cddaOnly},
+	}
+	for _, tt := range tests {
+		if got := discPrefixes(tt.cueFolder); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("discPrefixes(%q) = %q, want %q", tt.cueFolder, got, tt.want)
+		}
+	}
+}
+
+func TestStopAndRemoveDiscTracks(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{".disc-cuer/6507c409/playlist.cue/track0001", "usb/a.flac", "cdda:///2"}
+	f.current = 0
+	client := f.start(t)
+
+	if err := client.StopAndRemove(client.DiscPrefixes()...); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "currentsong", "stop", "playlistinfo", "delete 2:3", "delete 0:1")
+	assertQueue(t, f, "usb/a.flac")
+}
+
+func TestStopIfPlaying(t *testing.T) {
+	queue := []string{"usb/a.flac", "cdda:///1", "cdda:///2", "usb2/b.flac"}
+	tests := []struct {
+		name     string
+		prefix   string
+		current  int
+		wantStop bool
+	}{
+		{"disc playing", CDDAPathPrefix, 1, true},
+		{"other playing", CDDAPathPrefix, 0, false},
+		{"mount playing", "usb/", 0, true},
+		{"mount with a longer name playing", "usb/", 3, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMPD()
+			f.queue = append([]string(nil), queue...)
+			f.current = tt.current
+			client := f.start(t)
+
+			if err := client.StopIfPlaying(tt.prefix); err != nil {
+				t.Fatal(err)
+			}
+			stopped := false
+			for _, c := range f.sent() {
+				stopped = stopped || c == "stop"
+			}
+			if stopped != tt.wantStop {
+				t.Errorf("stop sent = %v, want %v", stopped, tt.wantStop)
+			}
+			// The queue is kept, unlike StopAndRemove
+			assertQueue(t, f, queue...)
+		})
+	}
+}
+
 func TestMount(t *testing.T) {
 	const neighbor = "udisks://Kingston-1234-by-uuid-AAAA-BBBB"
 	tests := []struct {
@@ -183,8 +262,33 @@ func TestUnmount(t *testing.T) {
 	if len(f.mounts) != 0 {
 		t.Errorf("mounts = %v, want none", f.mounts)
 	}
-	if err := client.Unmount("MYUSB"); err == nil {
-		t.Error("unmounting an unknown label should fail")
+	// Already unmounted, by an eject from the API before the device is removed
+	if err := client.Unmount("MYUSB"); err != nil {
+		t.Errorf("unmounting an unknown label = %v, want nil", err)
+	}
+	assertCommands(t, f, "listmounts", "unmount MYUSB", "listmounts")
+}
+
+func TestUSBMounts(t *testing.T) {
+	f := newFakeMPD()
+	f.mounts = []fakeMount{
+		{"", "/var/lib/mpd/music"},
+		{"MYUSB", "udisks://Kingston-by-uuid-AAAA"},
+		{"NAS", "nfs://nas/music"},
+		{"OTHER", "udisks://by-uuid-BBBB"},
+	}
+	client := f.start(t)
+
+	got, err := client.USBMounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Mount{
+		{Name: "MYUSB", Storage: "udisks://Kingston-by-uuid-AAAA"},
+		{Name: "OTHER", Storage: "udisks://by-uuid-BBBB"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("USBMounts() = %v, want %v", got, want)
 	}
 }
 

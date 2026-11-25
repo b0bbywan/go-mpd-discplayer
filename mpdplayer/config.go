@@ -11,14 +11,16 @@ type MPDConn struct {
 	Type          string // "unix" or "tcp"
 	Address       string // socket path or TCP address
 	ReconnectWait time.Duration
+	CueFolder     string // folder of the disc CUE sheets in the MPD library, "" when out of it
 	CuerConfig    *config.Config
 }
 
-func NewMPDConnection(connectionType, address string, reconnectWait time.Duration) (*MPDConn, error) {
+func NewMPDConnection(connectionType, address string, reconnectWait time.Duration, cueFolder string) (*MPDConn, error) {
 	conn := &MPDConn{
 		Type:          connectionType,
 		Address:       address,
 		ReconnectWait: reconnectWait,
+		CueFolder:     cueFolder,
 	}
 
 	if err := validateMPDConnection(conn); err != nil {

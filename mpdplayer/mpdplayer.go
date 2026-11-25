@@ -42,7 +42,7 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 	// Ensure connection is valid
 	if rc.client == nil {
 		if err := rc.connectWithoutLock(); err != nil {
-			return fmt.Errorf("reconnection failed: %w", err)
+			return fmt.Errorf("%w: reconnection failed: %w", ErrMPD, err)
 		}
 	}
 
@@ -51,13 +51,13 @@ func (rc *ReconnectingMPDClient) execute(loadFunc func(*mpd.Client) error) error
 			if isConnError(err) {
 				log.Printf("Connection error detected: %v. Reconnecting...", err)
 				if reconnectErr := rc.Reconnect(); reconnectErr != nil {
-					return fmt.Errorf("reconnection failed: %w", reconnectErr)
+					return fmt.Errorf("%w: reconnection failed: %w", ErrMPD, reconnectErr)
 				}
 				// After reconnection, retry loadFunc
 				continue
 			}
 			// For non-connection errors, return immediately
-			return fmt.Errorf("function execution error: %w", err)
+			return markMPDError(fmt.Errorf("function execution error: %w", err))
 		}
 		// If loadFunc succeeds, break the loop
 		break
@@ -93,7 +93,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		}
 	}
 
-	var err error
+	var lastErr error
 	start := time.Now()
 	for retries := 0; time.Since(start) < rc.mpcConfig.ReconnectWait; retries++ {
 		client, err := mpd.Dial(rc.mpcConfig.Type, rc.mpcConfig.Address)
@@ -101,6 +101,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 			rc.client = client
 			return nil
 		}
+		lastErr = err
 		// Calculate wait time with exponential backoff, capped by reconnectWait
 		waitTime := reconnectingWaitTime(retries, rc.mpcConfig.ReconnectWait, start)
 
@@ -112,7 +113,7 @@ func (rc *ReconnectingMPDClient) connectWithoutLock() error {
 		case <-time.After(waitTime): // Sleep for the calculated retry interval
 		}
 	}
-	return fmt.Errorf("failed to connect to MPD server %s://%s after %s: %w", rc.mpcConfig.Type, rc.mpcConfig.Address, rc.mpcConfig.ReconnectWait, err)
+	return fmt.Errorf("failed to connect to MPD server %s://%s after %s: %w", rc.mpcConfig.Type, rc.mpcConfig.Address, rc.mpcConfig.ReconnectWait, lastErr)
 }
 
 func reconnectingWaitTime(retries int, reconnectWait time.Duration, start time.Time) time.Duration {

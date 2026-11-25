@@ -154,6 +154,9 @@ func TestDeviceHandlers(t *testing.T) {
 
 func TestPlayerActions(t *testing.T) {
 	notADrive := filepath.Join(t.TempDir(), "sr0")
+	run := func(a Action) func(p *Player) error {
+		return func(p *Player) error { return p.ExecuteAction(a) }
+	}
 	tests := []struct {
 		name    string
 		action  func(p *Player) error
@@ -175,9 +178,11 @@ func TestPlayerActions(t *testing.T) {
 		{"PlayMount unknown", func(p *Player) error { return p.PlayMount("NAS") }, []string{"USBMounts"}, true},
 		{"ClearMount unknown", func(p *Player) error { return p.ClearMount("NAS") }, []string{"USBMounts"}, true},
 		{"EjectMount unknown", func(p *Player) error { return p.EjectMount("MYUSB2") }, []string{"USBMounts"}, true},
-		{"ExecuteAction play", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionPlay) }, []string{"StartDiscPlayback /dev/sr1"}, false},
-		{"ExecuteAction stop", func(p *Player) error { return p.ExecuteAction("/dev/sr1", ActionStop) }, []string{"Stop"}, false},
-		{"ExecuteAction eject", func(p *Player) error { return p.ExecuteAction(notADrive, ActionEject) }, []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
+		{"ExecuteAction disc play", run(Action{Name: ActionDiscPlay, Device: "/dev/sr1"}), []string{"StartDiscPlayback /dev/sr1"}, false},
+		{"ExecuteAction disc stop", run(Action{Name: ActionDiscStop}), []string{"StopIfPlaying cdda:// .disc-cuer/"}, false},
+		{"ExecuteAction disc eject", run(Action{Name: ActionDiscEject, Device: notADrive}), []string{"StopAndRemove cdda:// .disc-cuer/"}, true},
+		{"ExecuteAction stream play", run(Action{Name: ActionStreamPlay, URL: "http://radio/stream"}), []string{"StartPlayback http://radio/stream"}, false},
+		{"ExecuteAction stop", run(Action{Name: ActionStop}), []string{"Stop"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

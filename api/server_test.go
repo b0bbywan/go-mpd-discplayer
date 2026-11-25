@@ -44,6 +44,11 @@ func (f *fakePlayer) StopMount(name string) error {
 	return f.err
 }
 
+func (f *fakePlayer) ClearMount(name string) error {
+	f.calls = append(f.calls, "clear_mount "+name)
+	return f.err
+}
+
 func (f *fakePlayer) EjectMount(name string) error {
 	f.calls = append(f.calls, "eject_mount "+name)
 	return f.err
@@ -66,6 +71,11 @@ func (f *fakePlayer) Stop() error {
 
 func (f *fakePlayer) StopDisc() error {
 	f.calls = append(f.calls, "stop_disc")
+	return f.err
+}
+
+func (f *fakePlayer) ClearDisc() error {
+	f.calls = append(f.calls, "clear_disc")
 	return f.err
 }
 
@@ -98,9 +108,11 @@ func TestPlayerRoutes(t *testing.T) {
 		{"/player/stop", "stop"},
 		{"/player/disc/play", "play"},
 		{"/player/disc/stop", "stop_disc"},
+		{"/player/disc/clear", "clear_disc"},
 		{"/player/disc/eject", "eject"},
 		{"/player/mounts/MYUSB/play", "play_mount MYUSB"},
 		{"/player/mounts/MYUSB/stop", "stop_mount MYUSB"},
+		{"/player/mounts/MYUSB/clear", "clear_mount MYUSB"},
 		{"/player/mounts/MYUSB/eject", "eject_mount MYUSB"},
 		{"/player/mounts/MY%20USB/play", "play_mount MY USB"},
 	}

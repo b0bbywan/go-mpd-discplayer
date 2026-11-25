@@ -20,11 +20,13 @@ import (
 type Player interface {
 	PlayDisc(drive string) error  // play the disc in drive, "" for the drive holding an audio disc
 	StopDisc() error              // stop playback when the disc is playing
+	ClearDisc() error             // stop the disc and remove its tracks from the queue
 	EjectDisc(drive string) error // eject the disc in drive, "" for the drive holding one
 
 	Mounts() ([]mpdplayer.Mount, error) // list the USB storages mounted in MPD
 	PlayMount(name string) error        // play a USB storage
 	StopMount(name string) error        // stop playback when the USB storage is playing
+	ClearMount(name string) error       // stop the USB storage and remove its files from the queue
 	EjectMount(name string) error       // unmount a USB storage from MPD
 
 	PlayURL(url string) error // play a stream

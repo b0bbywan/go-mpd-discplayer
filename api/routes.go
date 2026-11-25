@@ -53,6 +53,10 @@ func (s *Server) registerPlayerRoutes(p Player) {
 		withAction(p.StopDisc),
 	)
 	s.mux.HandleFunc(
+		"POST /player/disc/clear",
+		withAction(p.ClearDisc),
+	)
+	s.mux.HandleFunc(
 		"POST /player/disc/eject",
 		withDisc(p.EjectDisc),
 	)
@@ -68,6 +72,10 @@ func (s *Server) registerPlayerRoutes(p Player) {
 	s.mux.HandleFunc(
 		"POST /player/mounts/{name}/stop",
 		withMount(p.StopMount),
+	)
+	s.mux.HandleFunc(
+		"POST /player/mounts/{name}/clear",
+		withMount(p.ClearMount),
 	)
 	s.mux.HandleFunc(
 		"POST /player/mounts/{name}/eject",

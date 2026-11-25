@@ -96,6 +96,49 @@ func TestStopAndRemove(t *testing.T) {
 	}
 }
 
+func TestDiscPrefixes(t *testing.T) {
+	cue := []string{"cdda://", ".disc-cuer/"}
+	cddaOnly := []string{"cdda://"}
+	tests := []struct {
+		cueFolder string
+		want      []string
+	}{
+		{".disc-cuer", cue},
+		// The CUE cache is MPDLibraryFolder joined with cueFolder, which
+		// filepath.Join cleans
+		{".disc-cuer/", cue},
+		{"./.disc-cuer", cue},
+		{"/.disc-cuer", cue},
+		{"cache/../.disc-cuer", cue},
+		{"cache//discs", []string{"cdda://", "cache/discs/"}},
+		// The library root or a cache out of the MPD library: no prefix, as
+		// an empty one would match the whole library
+		{"", cddaOnly},
+		{".", cddaOnly},
+		{"/", cddaOnly},
+		{"..", cddaOnly},
+		{"../cuer", cddaOnly},
+	}
+	for _, tt := range tests {
+		if got := discPrefixes(tt.cueFolder); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("discPrefixes(%q) = %q, want %q", tt.cueFolder, got, tt.want)
+		}
+	}
+}
+
+func TestStopAndRemoveDiscTracks(t *testing.T) {
+	f := newFakeMPD()
+	f.queue = []string{".disc-cuer/6507c409/playlist.cue/track0001", "usb/a.flac", "cdda:///2"}
+	f.current = 0
+	client := f.start(t)
+
+	if err := client.StopAndRemove(client.DiscPrefixes()...); err != nil {
+		t.Fatal(err)
+	}
+	assertCommands(t, f, "currentsong", "stop", "playlistinfo", "delete 2:3", "delete 0:1")
+	assertQueue(t, f, "usb/a.flac")
+}
+
 func TestStopIfPlaying(t *testing.T) {
 	queue := []string{"usb/a.flac", "cdda:///1", "cdda:///2", "usb2/b.flac"}
 	tests := []struct {
